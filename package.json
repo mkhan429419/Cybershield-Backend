@@ -1,0 +1,26 @@
+{
+  "name": "cybershield-backend",
+  "version": "1.0.0",
+  "description": "CyberShield: Cybersecurity Awareness & Incident Reporting Portal - Backend API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": ["cybersecurity", "phishing", "education", "awareness", "nodejs", "express"],
+  "author": "Maheen Akhtar Khan, Aimen Munawar, Hadia Ali",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "mongoose": "^8.18.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
