@@ -7,6 +7,7 @@ require("dotenv").config();
 const adminRoutes = require("./routes/admin");
 const orgRoutes = require("./routes/orgs");
 const userRoutes = require("./routes/users");
+const groupRoutes = require("./routes/groups");
 const whatsappCampaignRoutes = require("./routes/whatsappCampaigns");
 
 const app = express();
@@ -39,6 +40,7 @@ app.get("/health", (req, res) => {
 app.use("/api/admins", adminRoutes);
 app.use("/api/orgs", orgRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/orgs", groupRoutes);
 app.use("/api/whatsapp-campaigns", whatsappCampaignRoutes);
 
 // 404 handler
