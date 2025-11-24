@@ -8,6 +8,7 @@ const adminRoutes = require("./routes/admin");
 const orgRoutes = require("./routes/orgs");
 const userRoutes = require("./routes/users");
 const whatsappCampaignRoutes = require("./routes/whatsappCampaigns");
+const voicePhishingRoutes = require("./routes/voicePhishing");
 
 const app = express();
 
@@ -30,16 +31,17 @@ app.use(express.urlencoded({ extended: true }));
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString(), 
     environment: process.env.NODE_ENV || "development",
   });
-});
+}); 
 
 // API routes
 app.use("/api/admins", adminRoutes);
 app.use("/api/orgs", orgRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/whatsapp-campaigns", whatsappCampaignRoutes);
+app.use("/api/voice-phishing", voicePhishingRoutes);
 
 // 404 handler
 app.use((req, res) => {
