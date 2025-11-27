@@ -158,7 +158,7 @@ class ElevenLabsService {
       // Use ElevenLabs API to analyze the conversation
       // For now, we'll use a simple analysis, but this can be enhanced with ElevenLabs evaluation criteria
       
-      const analysisPrompt = `Analyze the following conversation transcript and determine if the user fell for a phishing attempt. 
+      const analysisPrompt = `Analyze the following conversation transcript and determine if the user fell for a phishing attempt. Context: Pakistan.
       
 Scenario Type: ${scenarioType === "phishing" ? "This is a PHISHING scenario" : "This is a NORMAL scenario"}
 
@@ -166,7 +166,7 @@ Transcript:
 ${transcript}
 
 Please analyze:
-1. Did the user provide any sensitive information? (passwords, credit cards, SSN, personal details, etc.)
+1. Did the user provide any sensitive information? (passwords, credit/debit cards, CNIC, bank details, ATM PINs, OTP codes, mobile wallet PINs, personal info, etc.)
 2. What was the user's resistance level? (high, medium, low)
 3. Did the user fall for the phishing attempt? (only relevant if scenarioType is "phishing")
 4. What types of sensitive information were provided (if any)?
@@ -187,14 +187,14 @@ Return your analysis in JSON format with the following structure:
   "analysisRationale": "detailed explanation"
 }`;
 
-      // For now, we'll use a simple keyword-based analysis
-      // In production, you would use ElevenLabs evaluation criteria or an LLM API
+      // Keyword-based analysis for Pakistan context
       const sensitiveKeywords = [
-        "password", "passcode", "pin", "ssn", "social security",
-        "credit card", "card number", "cvv", "expiry",
-        "bank account", "routing number", "account number",
-        "date of birth", "dob", "mother's maiden name",
-        "security question", "otp", "verification code"
+        "password", "passcode", "pin", "cnic", "national id", "identity card",
+        "credit card", "debit card", "card number", "cvv", "expiry",
+        "bank account", "iban", "account number",
+        "date of birth", "dob", "mother's name", "mother's maiden name",
+        "security question", "otp", "verification code", "atm pin",
+        "easypaisa", "jazzcash", "mobile wallet", "wallet pin"
       ];
 
       const transcriptLower = transcript.toLowerCase();
@@ -215,16 +215,28 @@ Return your analysis in JSON format with the following structure:
           sensitiveInfoTypes.push("password");
           score -= 20;
         }
-        if (transcriptLower.includes("credit card") || transcriptLower.includes("card number")) {
+        if (transcriptLower.includes("credit card") || transcriptLower.includes("debit card") || transcriptLower.includes("card number")) {
           sensitiveInfoTypes.push("credit_card");
           score -= 20;
         }
-        if (transcriptLower.includes("ssn") || transcriptLower.includes("social security")) {
-          sensitiveInfoTypes.push("ssn");
+        if (transcriptLower.includes("cnic") || transcriptLower.includes("national id") || transcriptLower.includes("identity card")) {
+          sensitiveInfoTypes.push("cnic");
           score -= 20;
         }
-        if (transcriptLower.includes("bank account")) {
+        if (transcriptLower.includes("bank account") || transcriptLower.includes("iban")) {
           sensitiveInfoTypes.push("bank_account");
+          score -= 15;
+        }
+        if (transcriptLower.includes("atm pin") || transcriptLower.includes("pin")) {
+          sensitiveInfoTypes.push("atm_pin");
+          score -= 20;
+        }
+        if (transcriptLower.includes("otp") || transcriptLower.includes("verification code")) {
+          sensitiveInfoTypes.push("otp");
+          score -= 20;
+        }
+        if (transcriptLower.includes("easypaisa") || transcriptLower.includes("jazzcash") || transcriptLower.includes("wallet pin")) {
+          sensitiveInfoTypes.push("mobile_wallet");
           score -= 15;
         }
       }

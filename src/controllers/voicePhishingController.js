@@ -2,41 +2,129 @@ const VoicePhishingConversation = require("../models/VoicePhishingConversation")
 const elevenlabsService = require("../services/elevenlabsService");
 const User = require("../models/User");
 
-// Phishing scenarios (mix of phishing and normal)
+// Phishing scenarios - Pakistan context
 // Note: The prompt is set in ElevenLabs dashboard with variables like {{scenario_type}} and {{scenario_description}}
 const PHISHING_SCENARIOS = [
   {
     type: "phishing",
-    description: "Bank Security Alert - Someone is trying to access your account. Please verify your identity.",
-    firstMessage: "Hello, this is your bank's security department. We've detected suspicious activity on your account. Can you verify your identity by providing your account password?",
+    description: "HBL Bank Security Alert - Suspicious activity detected on your account. Verify your identity immediately.",
+    firstMessage: "Assalam-o-Alaikum, this is HBL security department. We detected suspicious activity on your account. Can you verify your identity with your account password?",
   },
   {
     type: "phishing",
-    description: "Tech Support - Your computer has been infected. We need your login credentials to fix it.",
-    firstMessage: "Hello, this is Microsoft Tech Support. We've detected a virus on your computer. We need your login credentials to fix it remotely. Can you provide your password?",
+    description: "UBL Account Suspension - Your account will be suspended if you don't verify it now.",
+    firstMessage: "Hello, this is UBL. Your account will be suspended in 2 hours if you don't verify it. Please provide your CNIC number and ATM PIN to verify.",
   },
   {
     type: "phishing",
-    description: "IRS Tax Refund - You're eligible for a tax refund. Please provide your SSN and bank details.",
-    firstMessage: "Hello, this is the IRS. You're eligible for a tax refund. To process your refund, we need your Social Security Number and bank account details. Can you provide that information?",
+    description: "Meezan Bank OTP Verification - We need to verify your account with an OTP code.",
+    firstMessage: "Assalam-o-Alaikum, this is Meezan Bank. We need to verify your account. Please share the OTP code we just sent to your phone.",
+  },
+  {
+    type: "phishing",
+    description: "Daraz Parcel Delivery - You have a parcel waiting. Verify your details to receive it.",
+    firstMessage: "Hello, you have a parcel from Daraz waiting for delivery. To confirm delivery, we need your CNIC number and address verification.",
+  },
+  {
+    type: "phishing",
+    description: "Jeeto Pakistan Prize - You've won a prize! Claim it by providing your details.",
+    firstMessage: "Congratulations! You've won 50,000 rupees in Jeeto Pakistan. To claim your prize, we need your CNIC number and bank account details.",
+  },
+  {
+    type: "phishing",
+    description: "Police Case - A complaint has been filed against you. Verify your identity.",
+    firstMessage: "This is the police station. A complaint has been filed against you. We need your CNIC number and address to verify your identity.",
+  },
+  {
+    type: "phishing",
+    description: "PTCL Tech Support - Your internet has been compromised. We need your account details.",
+    firstMessage: "This is PTCL technical support. We detected suspicious activity on your internet connection. We need your account password and CNIC to secure it.",
+  },
+  {
+    type: "phishing",
+    description: "NADRA Verification - Your CNIC needs verification. Provide your details.",
+    firstMessage: "This is NADRA. Your CNIC needs immediate verification. Please provide your CNIC number, date of birth, and mother's name.",
+  },
+  {
+    type: "phishing",
+    description: "FIA Investigation - You're under investigation. Provide information to clear your name.",
+    firstMessage: "This is FIA. You're under investigation for suspicious transactions. To clear your name, we need your bank account details and CNIC number.",
+  },
+  {
+    type: "phishing",
+    description: "Easypaisa Account Verification - Your account needs verification to continue using services.",
+    firstMessage: "This is Easypaisa. Your account needs verification. Please share your mobile wallet PIN and CNIC number.",
+  },
+  {
+    type: "phishing",
+    description: "JazzCash Security Alert - Unusual activity detected. Verify your account.",
+    firstMessage: "This is JazzCash security. We detected unusual activity on your account. Please verify with your account PIN and CNIC number.",
+  },
+  {
+    type: "phishing",
+    description: "Jazz SIM Verification - Your SIM needs verification to avoid deactivation.",
+    firstMessage: "This is Jazz. Your SIM card will be deactivated in 24 hours if you don't verify it. Please provide your CNIC number and the OTP we sent.",
+  },
+  {
+    type: "phishing",
+    description: "Telenor SIM Verification - Verify your SIM to continue service.",
+    firstMessage: "This is Telenor. Your SIM needs verification. Please share your CNIC number and the verification code we sent.",
+  },
+  {
+    type: "phishing",
+    description: "Allied Bank Account Blocked - Your account has been blocked. Unblock it by verifying.",
+    firstMessage: "This is Allied Bank. Your account has been blocked due to suspicious activity. To unblock it, provide your CNIC and account password.",
+  },
+];
+
+const NORMAL_SCENARIOS = [
+  {
+    type: "normal",
+    description: "HBL Customer Service - General inquiry about account services.",
+    firstMessage: "Assalam-o-Alaikum, this is HBL customer service. How can I help you today?",
   },
   {
     type: "normal",
-    description: "Customer Service - General inquiry about account services and features.",
-    firstMessage: "Hello, this is customer service. How can I help you today?",
+    description: "UBL Account Information - Informing about account features.",
+    firstMessage: "Hello, this is UBL. We're calling to inform you about new mobile banking features. Would you like to know more?",
+  },
+  {
+    type: "normal",
+    description: "Meezan Bank Service Update - Informing about new services.",
+    firstMessage: "Assalam-o-Alaikum, this is Meezan Bank. We're calling to inform you about our new Islamic banking products. Would you like to know more?",
   },
   {
     type: "normal",
     description: "Appointment Confirmation - Confirming your scheduled appointment.",
-    firstMessage: "Hello, this is calling to confirm your scheduled appointment. Can you confirm the date and time?",
+    firstMessage: "Hello, I'm calling to confirm your appointment scheduled for tomorrow. Can you confirm the time?",
+  },
+  {
+    type: "normal",
+    description: "Daraz Order Update - Updating you about your order status.",
+    firstMessage: "Hello, this is Daraz. We're calling to update you that your order has been shipped. It will arrive in 2-3 days.",
+  },
+  {
+    type: "normal",
+    description: "PTCL Service Inquiry - General information about internet packages.",
+    firstMessage: "Hello, this is PTCL. We're calling to inform you about our new internet packages. Would you like to hear about them?",
   },
 ];
 
 /**
- * Get a random scenario (mix of phishing and normal)
+ * Get a random scenario with weighted selection
+ * 70% chance of phishing scenario, 30% chance of normal scenario
  */
 function getRandomScenario() {
-  return PHISHING_SCENARIOS[Math.floor(Math.random() * PHISHING_SCENARIOS.length)];
+  const random = Math.random();
+  
+  // 70% chance for phishing, 30% chance for normal
+  if (random < 0.7) {
+    // Select random phishing scenario
+    return PHISHING_SCENARIOS[Math.floor(Math.random() * PHISHING_SCENARIOS.length)];
+  } else {
+    // Select random normal scenario
+    return NORMAL_SCENARIOS[Math.floor(Math.random() * NORMAL_SCENARIOS.length)];
+  }
 }
 
 /**
@@ -67,7 +155,8 @@ const initiateConversation = async (req, res) => {
     const conversation = new VoicePhishingConversation({
       userId,
       organizationId: req.user.orgId || null,
-      elevenLabsConversationId: "", // Will be updated after frontend connects
+      // elevenLabsConversationId will be undefined initially (sparse unique index allows multiple undefined values)
+      // It will be set after frontend connects to ElevenLabs
       agentId: agentId,
       scenarioType: scenario.type,
       scenarioDescription: scenario.description,
