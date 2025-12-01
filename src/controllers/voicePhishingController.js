@@ -1,5 +1,5 @@
 const VoicePhishingConversation = require("../models/VoicePhishingConversation");
-const elevenlabsService = require("../services/elevenlabsService");
+const geminiService = require("../services/geminiService");
 const User = require("../models/User");
 
 // Phishing scenarios - Pakistan context
@@ -296,10 +296,10 @@ const endConversation = async (req, res) => {
         .map((t) => `${t.role === "user" ? "User" : "Agent"}: ${t.message}`)
         .join("\n");
 
-    // Analyze conversation using ElevenLabs service
+    // Analyze conversation using Gemini AI service
     let analysis;
     try {
-      analysis = await elevenlabsService.analyzeConversation(
+      analysis = await geminiService.analyzeConversation(
         fullTranscript,
         conversation.scenarioType
       );
