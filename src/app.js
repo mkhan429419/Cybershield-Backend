@@ -9,6 +9,7 @@ const orgRoutes = require("./routes/orgs");
 const userRoutes = require("./routes/users");
 const whatsappCampaignRoutes = require("./routes/whatsappCampaigns");
 const voicePhishingRoutes = require("./routes/voicePhishing");
+const emailRoutes = require("./routes/email");
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use("/api/orgs", orgRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/whatsapp-campaigns", whatsappCampaignRoutes);
 app.use("/api/voice-phishing", voicePhishingRoutes);
+app.use("/api/email-campaigns", emailRoutes);
 
 // 404 handler
 app.use((req, res) => {
