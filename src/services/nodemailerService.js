@@ -3,14 +3,15 @@ const nodemailer = require("nodemailer");
 let transporter = null;
 
 const getTransporter = () => {
-  if (transporter) {
-    return transporter;
-  }
+  if (transporter) return transporter;
+
   const smtpUser = process.env.SMTP_USER;
   const smtpPassword = process.env.SMTP_PASSWORD;
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = parseInt(process.env.SMTP_PORT);
-  const smtpSecure = process.env.SMTP_SECURE;
+
+  // FIX: Only use secure for port 465
+  const smtpSecure = smtpPort === 465;
 
   transporter = nodemailer.createTransport({
     host: smtpHost,
@@ -24,6 +25,7 @@ const getTransporter = () => {
 
   return transporter;
 };
+
 
 const sendEmail = async (emailData) => {
   try {
