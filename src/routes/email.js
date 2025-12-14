@@ -1,8 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const { sendEmail } = require("../controllers/emailController");
+const { sendEmail, getEmails } = require("../controllers/emailController");
 
-// Simple send email route - no auth required
+// Get all emails
+router.get("/", getEmails);
+
+// Send email route
 router.post("/send", sendEmail);
 
 module.exports = router;
