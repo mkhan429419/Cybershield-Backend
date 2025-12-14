@@ -33,6 +33,11 @@ const emailSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
+    campaignId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Campaign",
+      required: false,
+    },
   },
   {
     timestamps: true,

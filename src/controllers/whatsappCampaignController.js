@@ -9,10 +9,11 @@ const startCampaignScheduler = () => {
       const scheduledCampaigns = await WhatsAppCampaign.find({
         status: "scheduled",
         scheduleDate: { $lte: now },
+        managedByParentCampaign: { $ne: true }, // Only schedule independent campaigns
       });
 
       for (const campaign of scheduledCampaigns) {
-        console.log(`Starting scheduled campaign: ${campaign.name}`);
+        console.log(`Starting scheduled WhatsApp campaign: ${campaign.name}`);
         campaign.status = "running";
         campaign.startDate = new Date();
         await campaign.save();
