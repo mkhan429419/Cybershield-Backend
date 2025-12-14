@@ -87,11 +87,6 @@ const whatsAppCampaignSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    language: {
-      type: String,
-      enum: ["en", "ur"],
-      default: "en",
-    },
     trackingEnabled: {
       type: Boolean,
       default: true,
