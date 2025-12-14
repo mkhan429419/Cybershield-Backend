@@ -21,6 +21,10 @@ const whatsAppCampaignSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    managedByParentCampaign: {
+      type: Boolean,
+      default: false,
+    },
     templateId: {
       type: String,
       required: true,
