@@ -1,6 +1,7 @@
 const WhatsAppCampaign = require("../models/WhatsAppCampaign");
 const twilioService = require("../services/twilioService");
 const User = require("../models/User");
+const translateService = require("../services/translateService");
 
 const startCampaignScheduler = () => {
   setInterval(async () => {
@@ -39,7 +40,16 @@ const createCampaign = async (req, res) => {
       manualUsers,
       scheduleDate,
       trackingEnabled = true,
+      language = "en",
     } = req.body;
+
+    // Validate language parameter
+    if (language !== "en" && language !== "ur") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid language parameter. Must be 'en' (English) or 'ur' (Urdu)",
+      });
+    }
 
     const userId = req.user._id;
 
@@ -87,6 +97,7 @@ const createCampaign = async (req, res) => {
       messageTemplate,
       landingPageUrl,
       trackingEnabled,
+      language,
       scheduleDate: scheduleDate ? new Date(scheduleDate) : null,
       status: scheduleDate ? "scheduled" : "draft",
     });
@@ -217,6 +228,34 @@ const sendCampaignMessages = async (campaign) => {
       (target) => target.status === "pending"
     );
 
+    // Get the message template and translate if needed
+    let messageToSend = campaign.messageTemplate;
+    const language = campaign.language || "en";
+
+    if (language === "ur") {
+      try {
+        const translationResult = await translateService.translateToUrdu(
+          campaign.messageTemplate
+        );
+
+        if (!translationResult.success) {
+          console.error(
+            "Translation failed for campaign:",
+            campaign._id,
+            translationResult.error
+          );
+          // Continue with original message if translation fails
+          messageToSend = campaign.messageTemplate;
+        } else {
+          messageToSend = translationResult.translatedText;
+        }
+      } catch (translationError) {
+        console.error("Translation Error:", translationError);
+        // Continue with original message if translation fails
+        messageToSend = campaign.messageTemplate;
+      }
+    }
+
     for (const target of pendingTargets) {
       try {
         if (!twilioService.isValidPhoneNumber(target.phoneNumber)) {
@@ -226,7 +265,7 @@ const sendCampaignMessages = async (campaign) => {
         }
         const result = await twilioService.sendWhatsAppMessage(
           target.phoneNumber,
-          campaign.messageTemplate
+          messageToSend
         );
 
         if (result.success) {
@@ -279,7 +318,18 @@ const updateCampaign = async (req, res) => {
       "messageTemplate",
       "landingPageUrl",
       "scheduleDate",
+      "language",
     ];
+
+    // Validate language if provided
+    if (updates.language !== undefined) {
+      if (updates.language !== "en" && updates.language !== "ur") {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid language parameter. Must be 'en' (English) or 'ur' (Urdu)",
+        });
+      }
+    }
     allowedUpdates.forEach((field) => {
       if (updates[field] !== undefined) {
         campaign[field] = updates[field];

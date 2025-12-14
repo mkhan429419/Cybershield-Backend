@@ -1,9 +1,10 @@
 const nodemailerService = require("../services/nodemailerService");
 const Email = require("../models/Email");
+const translateService = require("../services/translateService");
 
 const sendEmail = async (req, res) => {
   try {
-    const { sentBy, sentTo, subject, bodyContent } = req.body;
+    const { sentBy, sentTo, subject, bodyContent, language = "en" } = req.body;
 
     // Validate required fields
     if (!sentBy || !sentTo || !subject || !bodyContent) {
@@ -11,6 +12,56 @@ const sendEmail = async (req, res) => {
         success: false,
         message: "Missing required fields: sentBy, sentTo, subject, bodyContent",
       });
+    }
+
+    // Validate language parameter
+    if (language !== "en" && language !== "ur") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid language parameter. Must be 'en' (English) or 'ur' (Urdu)",
+      });
+    }
+
+    let finalSubject = subject;
+    let finalBodyContent = bodyContent;
+
+    // Translate to Urdu if language is 'ur'
+    if (language === "ur") {
+      try {
+        // Translate both subject and bodyContent
+        const [subjectResult, bodyResult] = await Promise.all([
+          translateService.translateToUrdu(subject),
+          translateService.translateToUrdu(bodyContent),
+        ]);
+
+        if (!subjectResult.success) {
+          console.error("Subject translation failed:", subjectResult.error);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to translate email subject",
+            error: subjectResult.error,
+          });
+        }
+
+        if (!bodyResult.success) {
+          console.error("Body translation failed:", bodyResult.error);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to translate email body",
+            error: bodyResult.error,
+          });
+        }
+
+        finalSubject = subjectResult.translatedText;
+        finalBodyContent = bodyResult.translatedText;
+      } catch (translationError) {
+        console.error("Translation Error:", translationError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to translate email content",
+          error: translationError.message,
+        });
+      }
     }
 
     
@@ -28,7 +79,7 @@ const sendEmail = async (req, res) => {
     }
 
     // Format email body - convert plain text to HTML
-    let emailHtml = bodyContent;
+    let emailHtml = finalBodyContent;
     if (!emailHtml.includes("<")) {
       // Convert line breaks to <br>
       emailHtml = emailHtml.replace(/\n/g, "<br>");
@@ -39,7 +90,7 @@ const sendEmail = async (req, res) => {
     const result = await nodemailerService.sendEmail({
       to: sentTo,
       from: sentBy,
-      subject: subject,
+      subject: finalSubject,
       html: emailHtml,
     });
 
@@ -48,8 +99,8 @@ const sendEmail = async (req, res) => {
       const emailRecord = new Email({
         sentBy,
         sentTo,
-        subject,
-        bodyContent,
+        subject: finalSubject,
+        bodyContent: finalBodyContent,
         messageId: result.success ? result.messageId : null,
         status: result.success ? "sent" : "failed",
         error: result.success ? null : result.error,
