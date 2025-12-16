@@ -43,6 +43,45 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+// GET /api/users/all - Get all users (for email campaigns, etc.)
+const getAllUsers = async (req, res) => {
+  try {
+    const { page = 1, limit = 1000, status } = req.query;
+
+    const query = {};
+    if (status) {
+      query.status = status;
+    }
+
+    const users = await User.find(query)
+      .select('_id email displayName role status')
+      .sort({ email: 1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await User.countDocuments(query);
+
+    res.json({
+      users: users.map(user => ({
+        _id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        status: user.status
+      })),
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / limit),
+        total
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+};
+
 module.exports = {
-  getUserProfile
+  getUserProfile,
+  getAllUsers
 };
