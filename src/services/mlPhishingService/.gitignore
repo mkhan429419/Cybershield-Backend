@@ -33,3 +33,9 @@ ENV/
 .idea/
 *.swp
 *.swo
+
+# ML embeddings & models
+src/services/mlPhishingService/data/embeddings/
+src/services/mlPhishingService/models/*.h5
+*.vec
+*.h5
