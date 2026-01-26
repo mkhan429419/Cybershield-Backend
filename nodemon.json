@@ -1,0 +1,20 @@
+{
+  "watch": [
+    "src/controllers",
+    "src/models",
+    "src/routes",
+    "src/middleware",
+    "src/config",
+    "src/services/geminiService.js",
+    "src/services/mlPhishingService.js"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "src/services/mlPhishingService/**",
+    "node_modules",
+    "*.log",
+    ".git"
+  ],
+  "legacyWatch": true,
+  "exec": "node src/server.js"
+}

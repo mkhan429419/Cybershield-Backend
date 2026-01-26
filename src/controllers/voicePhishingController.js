@@ -1,6 +1,13 @@
 const VoicePhishingConversation = require("../models/VoicePhishingConversation");
 const geminiService = require("../services/geminiService");
+const mlPhishingService = require("../services/mlPhishingService");
 const User = require("../models/User");
+
+// Configuration: Set to 'ml' to use ML model, 'gemini' to use Gemini AI
+const ANALYSIS_METHOD = process.env.VOICE_PHISHING_ANALYSIS_METHOD || 'ml';
+// Model type: 'ml', 'cnn_bilstm', 'ensemble', or 'auto' (auto-selects best available)
+// Default: 'cnn_bilstm' - uses CNN-BiLSTM model only
+const MODEL_TYPE = process.env.VOICE_PHISHING_MODEL_TYPE || 'cnn_bilstm';
 
 // Phishing scenarios - Pakistan context
 // Note: The prompt is set in ElevenLabs dashboard with variables like {{scenario_type}} and {{scenario_description}}
@@ -267,8 +274,11 @@ const updateTranscript = async (req, res) => {
  */
 const endConversation = async (req, res) => {
   try {
+    console.log("End conversation request received");
     const { conversationId } = req.params;
     const userId = req.user._id;
+
+    console.log("Looking for conversation:", conversationId, "for user:", userId);
 
     const conversation = await VoicePhishingConversation.findOne({
       _id: conversationId,
@@ -276,13 +286,17 @@ const endConversation = async (req, res) => {
     });
 
     if (!conversation) {
+      console.error("Conversation not found:", conversationId);
       return res.status(404).json({
         success: false,
         message: "Conversation not found",
       });
     }
 
+    console.log("Conversation found, status:", conversation.status);
+
     if (conversation.status === "completed") {
+      console.log("Conversation already completed, returning existing data");
       return res.json({
         success: true,
         data: conversation,
@@ -295,16 +309,195 @@ const endConversation = async (req, res) => {
       conversation.transcript
         .map((t) => `${t.role === "user" ? "User" : "Agent"}: ${t.message}`)
         .join("\n");
+    
+    console.log("Full transcript length:", fullTranscript?.length || 0);
+    console.log("Transcript preview:", fullTranscript?.substring(0, 100) || "empty");
 
-    // Analyze conversation using Gemini AI service
+    // Analyze conversation using ML model or Gemini AI service
     let analysis;
     try {
-      analysis = await geminiService.analyzeConversation(
-        fullTranscript,
-        conversation.scenarioType
-      );
+      if (ANALYSIS_METHOD === 'ml') {
+        console.log("Using ML model for analysis...");
+        console.log("Transcript length:", fullTranscript?.length || 0);
+        console.log("Scenario type:", conversation.scenarioType);
+        console.log("Model type:", MODEL_TYPE);
+        
+        // Hybrid approach: Use CNN-BiLSTM for score/resistance, Gemini for summary/info types
+        if (MODEL_TYPE === 'cnn_bilstm') {
+          console.log("Using hybrid approach: CNN-BiLSTM + Gemini");
+          
+          // Get CNN-BiLSTM results (score, resistance, fellForPhishing)
+          const analysisPromise = mlPhishingService.analyzeConversation(
+            fullTranscript,
+            conversation.scenarioType,
+            MODEL_TYPE
+          );
+          
+          // Set a timeout of 60 seconds for ML analysis
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('ML analysis timed out after 60 seconds')), 60000);
+          });
+          
+          const cnnAnalysis = await Promise.race([analysisPromise, timeoutPromise]);
+          
+          // Get Gemini results (summary, info types)
+          const geminiResult = await geminiService.getSummaryAndInfoTypes(
+            fullTranscript,
+            conversation.scenarioType
+          );
+          
+          // Combine results: CNN-BiLSTM for score/resistance, Gemini for summary/info types
+          if (cnnAnalysis.success && geminiResult.success) {
+            // Use Gemini's info types to determine if sensitive info was provided
+            const hasSensitiveInfo = geminiResult.sensitiveInfoTypes && geminiResult.sensitiveInfoTypes.length > 0;
+            
+            // Calculate nuanced score based on:
+            // 1. CNN-BiLSTM base prediction
+            // 2. What info was actually provided (from Gemini)
+            // 3. Amount of resistance shown
+            let finalScore = cnnAnalysis.analysis.score;
+            let finalResistanceLevel = cnnAnalysis.analysis.resistanceLevel;
+            let finalFellForPhishing = cnnAnalysis.analysis.fellForPhishing;
+            
+            // Define criticality of info types (higher = more critical)
+            const infoCriticality = {
+              'password': 10,
+              'atm_pin': 10,
+              'cnic': 9,
+              'credit_card': 8,
+              'bank_account': 7,
+              'otp': 6,
+              'mobile_wallet_pin': 6,
+              'personal_info': 4,  // Date of birth, mother's name - less critical
+              'address': 3,
+              'other': 2
+            };
+            
+            // Calculate total criticality of provided info
+            const totalCriticality = (geminiResult.sensitiveInfoTypes || []).reduce((sum, type) => {
+              return sum + (infoCriticality[type] || 2);
+            }, 0);
+            
+            // Adjust score based on what was provided and resistance shown
+            if (hasSensitiveInfo) {
+              // User provided some info - adjust score based on:
+              // 1. How critical the info is
+              // 2. How much resistance was shown (from CNN-BiLSTM)
+              
+              const baseScore = cnnAnalysis.analysis.score;
+              const resistanceScore = cnnAnalysis.analysis.resistanceLevel === 'high' ? 3 : 
+                                     cnnAnalysis.analysis.resistanceLevel === 'medium' ? 2 : 1;
+              
+              // Calculate adjusted score:
+              // - Start from base score (0-20 if fell for it, 60-80 if resisted)
+              // - If base is very low (0-20), it means model thinks they fell for it
+              // - Add points for resistance shown
+              // - Subtract points based on criticality of info provided
+              
+              if (baseScore <= 20) {
+                // Model predicted "fell for it" - but check if there was resistance
+                // Score range: 0-20 (very poor)
+                // Adjust: Add points for resistance, but still penalize for providing info
+                const resistanceBonus = resistanceScore * 5; // 5-15 points for resistance
+                const criticalityPenalty = Math.min(totalCriticality * 2, 15); // Penalty based on criticality
+                
+                // Final score: base + resistance bonus - criticality penalty
+                // But cap it appropriately for partial resistance cases
+                finalScore = Math.max(0, Math.min(50, baseScore + resistanceBonus - criticalityPenalty));
+                
+                // If score is in the 20-50 range, it's partial resistance
+                if (finalScore > 20 && finalScore < 50) {
+                  finalResistanceLevel = 'medium';
+                  finalFellForPhishing = true; // They did provide info, but showed resistance
+                } else if (finalScore <= 20) {
+                  finalResistanceLevel = 'low';
+                  finalFellForPhishing = true;
+                }
+              } else if (baseScore >= 60) {
+                // Model predicted "resisted" - but check if info was actually provided
+                // If info was provided, this is a misclassification - adjust score down
+                if (totalCriticality > 5) {
+                  // Critical info provided - adjust score down significantly
+                  finalScore = Math.max(20, baseScore - 30 - (totalCriticality * 2));
+                  finalResistanceLevel = 'medium';
+                  finalFellForPhishing = true;
+                } else if (totalCriticality > 0) {
+                  // Non-critical info provided - moderate adjustment
+                  finalScore = Math.max(30, baseScore - 20 - totalCriticality);
+                  finalResistanceLevel = 'medium';
+                  finalFellForPhishing = true;
+                }
+                // If no info provided, keep the high score
+              }
+            } else {
+              // No sensitive info provided - user resisted
+              // If model predicted "fell for it" but no info, it's likely a misclassification
+              if (cnnAnalysis.analysis.score <= 20) {
+                // Model predicted "fell for it" but no info - likely resistance
+                finalScore = Math.max(60, 60 + (cnnAnalysis.analysis.modelConfidence * 20));
+                finalResistanceLevel = 'high';
+                finalFellForPhishing = false;
+              }
+              // If model predicted "resisted" and no info, keep the high score
+            }
+            
+            // Ensure score is in valid range
+            finalScore = Math.max(0, Math.min(100, Math.round(finalScore)));
+            
+            analysis = {
+              success: true,
+              analysis: {
+                // Adjusted scores based on hybrid analysis
+                score: finalScore,
+                fellForPhishing: finalFellForPhishing,
+                resistanceLevel: finalResistanceLevel,
+                // Keep original model info for reference
+                modelPrediction: cnnAnalysis.analysis.modelPrediction,
+                modelConfidence: cnnAnalysis.analysis.modelConfidence,
+                modelType: 'cnn_bilstm_hybrid',
+                // From Gemini (summary and info type detection)
+                providedSensitiveInfo: hasSensitiveInfo,
+                sensitiveInfoTypes: geminiResult.sensitiveInfoTypes || [],
+                analysisRationale: geminiResult.analysisRationale,
+              }
+            };
+            console.log("Hybrid analysis completed successfully");
+            console.log("CNN-BiLSTM base score:", cnnAnalysis.analysis.score);
+            console.log("CNN-BiLSTM resistance:", cnnAnalysis.analysis.resistanceLevel);
+            console.log("Gemini info types:", geminiResult.sensitiveInfoTypes);
+            console.log("Total criticality:", totalCriticality);
+            console.log("Final adjusted score:", finalScore);
+          } else {
+            // Fallback to CNN-BiLSTM only if Gemini fails
+            console.warn("Gemini failed, using CNN-BiLSTM results only");
+            analysis = cnnAnalysis;
+          }
+        } else {
+          // For other model types (ml, ensemble, auto), use standard approach
+          const analysisPromise = mlPhishingService.analyzeConversation(
+            fullTranscript,
+            conversation.scenarioType,
+            MODEL_TYPE
+          );
+          
+          // Set a timeout of 60 seconds for ML analysis
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('ML analysis timed out after 60 seconds')), 60000);
+          });
+          
+          analysis = await Promise.race([analysisPromise, timeoutPromise]);
+          console.log("ML analysis completed successfully");
+        }
+      } else {
+        console.log("Using Gemini AI for analysis...");
+        analysis = await geminiService.analyzeConversation(
+          fullTranscript,
+          conversation.scenarioType
+        );
+      }
     } catch (error) {
       console.error("Analysis error:", error);
+      console.error("Error stack:", error.stack);
       analysis = {
         success: false,
         error: error.message || "Analysis failed",
@@ -313,19 +506,37 @@ const endConversation = async (req, res) => {
 
     if (!analysis || !analysis.success) {
       console.error("Analysis failed:", analysis?.error || "Unknown error");
-      // Still mark as completed even if analysis fails
-      conversation.status = "completed";
-      conversation.endedAt = new Date();
-      const duration = Math.floor((conversation.endedAt - conversation.startedAt) / 1000);
-      conversation.duration = duration;
-      await conversation.save();
+      console.error("Full analysis object:", JSON.stringify(analysis, null, 2));
+      
+      // Fallback to Gemini if ML model fails
+      if (ANALYSIS_METHOD === 'ml') {
+        console.log("ML model failed, falling back to Gemini...");
+        try {
+          analysis = await geminiService.analyzeConversation(
+            fullTranscript,
+            conversation.scenarioType
+          );
+          console.log("Gemini fallback successful");
+        } catch (geminiError) {
+          console.error("Gemini fallback also failed:", geminiError);
+        }
+      }
+      
+      // If still no analysis, mark as completed without score
+      if (!analysis || !analysis.success) {
+        conversation.status = "completed";
+        conversation.endedAt = new Date();
+        const duration = Math.floor((conversation.endedAt - conversation.startedAt) / 1000);
+        conversation.duration = duration;
+        await conversation.save();
 
-      return res.status(500).json({
-        success: false,
-        message: "Failed to analyze conversation",
-        error: analysis.error,
-        data: conversation,
-      });
+        return res.status(500).json({
+          success: false,
+          message: "Failed to analyze conversation",
+          error: analysis?.error || "Analysis service unavailable",
+          data: conversation,
+        });
+      }
     }
 
     // Update conversation with analysis results
@@ -359,6 +570,7 @@ const endConversation = async (req, res) => {
       await user.save();
     }
 
+    console.log("Conversation analysis complete, sending response");
     res.json({
       success: true,
       data: conversation,
@@ -366,11 +578,16 @@ const endConversation = async (req, res) => {
     });
   } catch (error) {
     console.error("End Conversation Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to end conversation",
-      error: error.message,
-    });
+    console.error("Error stack:", error.stack);
+    
+    // Make sure we send a response even if there's an error
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to end conversation",
+        error: error.message || "Unknown error occurred",
+      });
+    }
   }
 };
 

@@ -170,6 +170,117 @@ Analyze this conversation and determine:
       };
     }
   }
+
+  /**
+   * Get summary and sensitive information types from Gemini (for hybrid approach)
+   * This is used when CNN-BiLSTM provides score/resistance, and Gemini provides summary/info types
+   * @param {string} transcript - Full conversation transcript
+   * @param {string} scenarioType - "phishing" or "normal"
+   * @returns {Promise<Object>} Summary and sensitive info types
+   */
+  async getSummaryAndInfoTypes(transcript, scenarioType) {
+    try {
+      if (!this.apiKey || !this.genAI) {
+        return {
+          success: false,
+          error: "Gemini API key is not configured",
+        };
+      }
+
+      const model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+      const analysisPrompt = `You are a cybersecurity expert analyzing a phone conversation transcript from a security awareness training exercise in Pakistan. Your task is to identify what sensitive information the user provided and create a detailed summary.
+
+**Context:**
+- Scenario Type: ${scenarioType === "phishing" ? "PHISHING ATTEMPT" : "NORMAL customer service call"}
+- Location: Pakistan
+- This is a training exercise to test the user's security awareness
+
+**Conversation Transcript:**
+${transcript}
+
+**CRITICAL: Read the transcript carefully and distinguish between:**
+- What the AGENT asked for (requests, questions, demands)
+- What the USER actually provided (explicitly stated information, numbers, details they shared)
+- What the USER refused or declined to provide
+- What the USER questioned or expressed discomfort about
+
+**IMPORTANT: Only count information that the USER explicitly provided. Do NOT count:**
+- Information that was only requested by the agent
+- Information the user questioned or refused to provide
+- Information the user expressed discomfort about sharing
+- If the user said "I don't feel comfortable sharing it" or similar, they did NOT provide that information
+
+**Your Analysis Task:**
+
+1. **What types of sensitive information were provided?** (if any)
+   Categories: password, cnic, credit_card, bank_account, atm_pin, otp, mobile_wallet_pin, personal_info, address, other
+   
+   **IMPORTANT**: Only list information types that the USER actually provided. Be careful to distinguish:
+   - CNIC number vs bank account number (they are different - CNIC is a 13-digit identity card number, bank account is a different number)
+   - If user said "my number is 123456789" in response to CNIC request, that's CNIC, NOT bank account
+   - If user refused to provide something, do NOT include it in this list
+
+2. **Provide a detailed summary** explaining:
+   - What sensitive information the user ACTUALLY provided (with exact quotes from the transcript)
+   - What information the user REFUSED to provide (if any)
+   - What information was only REQUESTED but not provided
+   - The user's behavior and resistance level
+   - Be precise and accurate - do not confuse what was asked for with what was actually given
+
+**Important Notes:**
+- Consider the Pakistani context (CNIC instead of SSN, local banks like HBL, UBL, Meezan, services like Easypaisa, JazzCash)
+- Be strict about what constitutes sensitive information
+- Consider the user's tone, hesitation, and questioning as signs of awareness
+- If scenarioType is "normal", the user should NOT be penalized for normal interactions
+
+**Return your analysis in valid JSON format ONLY (no markdown, no code blocks, just the JSON object):**
+{
+  "sensitiveInfoTypes": ["type1", "type2"],
+  "analysisRationale": "detailed explanation with specific examples from the conversation"
+}`;
+
+      const result = await model.generateContent(analysisPrompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Parse JSON from response (remove markdown code blocks if present)
+      let jsonText = text.trim();
+      if (jsonText.startsWith("```json")) {
+        jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      } else if (jsonText.startsWith("```")) {
+        jsonText = jsonText.replace(/```\n?/g, "").trim();
+      }
+
+      const analysis = JSON.parse(jsonText);
+
+      // Validate the response structure
+      if (
+        !Array.isArray(analysis.sensitiveInfoTypes) ||
+        typeof analysis.analysisRationale !== "string"
+      ) {
+        throw new Error("Invalid analysis response structure from Gemini");
+      }
+
+      return {
+        success: true,
+        sensitiveInfoTypes: analysis.sensitiveInfoTypes,
+        analysisRationale: analysis.analysisRationale,
+      };
+    } catch (error) {
+      console.error("Error getting summary and info types from Gemini:", error);
+      
+      // If JSON parsing fails, try to extract JSON from the response
+      if (error.message.includes("JSON") || error instanceof SyntaxError) {
+        console.error("Failed to parse Gemini response as JSON. Raw response:", error.message);
+      }
+
+      return {
+        success: false,
+        error: error.message || "Failed to get summary and info types",
+      };
+    }
+  }
 }
 
 module.exports = new GeminiService();

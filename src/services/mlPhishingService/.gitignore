@@ -1,0 +1,35 @@
+# Model files
+models/*.pkl
+models/*.json
+!models/.gitkeep
+
+# Training data
+data/*.csv
+!data/.gitkeep
+
+# Temporary files
+temp_*.py
+temp_*.json
+.temp/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+venv_cnn_bilstm/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
