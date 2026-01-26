@@ -10,8 +10,14 @@ class VoicePhishingMLService {
   constructor() {
     this.pythonScriptPath = path.join(__dirname, 'mlPhishingService', 'run_inference.py');
     
+    // Determine default Python command based on platform
+    const isWindows = process.platform === 'win32';
+    const defaultPython = isWindows ? 'python' : 'python3';
+    
     // Check for virtual environment Python first (has TensorFlow for CNN-BiLSTM)
-    const venvPython = path.join(__dirname, 'mlPhishingService', 'venv_cnn_bilstm', 'bin', 'python3');
+    const venvPython = isWindows
+      ? path.join(__dirname, 'mlPhishingService', 'venv_cnn_bilstm', 'Scripts', 'python.exe')
+      : path.join(__dirname, 'mlPhishingService', 'venv_cnn_bilstm', 'bin', 'python3');
     const venvPythonExists = fs.existsSync(venvPython);
     
     // Use virtual environment Python if available, otherwise use env var or default
@@ -19,7 +25,7 @@ class VoicePhishingMLService {
       this.pythonExecutable = venvPython;
       console.log('Using virtual environment Python (has TensorFlow support)');
     } else {
-    this.pythonExecutable = process.env.PYTHON_PATH || 'python3';
+      this.pythonExecutable = process.env.PYTHON_PATH || defaultPython;
       if (process.env.PYTHON_PATH) {
         console.log('Using Python from PYTHON_PATH environment variable');
       } else {
@@ -89,12 +95,12 @@ class VoicePhishingMLService {
           console.log('Python stdout:', data.toString());
         });
 
-        // Add timeout (30 seconds)
+        // Add timeout (90 seconds - TensorFlow needs time to initialize on first run)
         const timeout = setTimeout(() => {
           pythonProcess.kill();
-          console.error('Python script timeout after 30 seconds');
-          reject(new Error('ML model analysis timed out after 30 seconds'));
-        }, 30000);
+          console.error('Python script timeout after 90 seconds');
+          reject(new Error('ML model analysis timed out after 90 seconds'));
+        }, 90000);
 
         pythonProcess.on('close', (code) => {
           clearTimeout(timeout);
