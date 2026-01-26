@@ -6,7 +6,7 @@
     "src/middleware",
     "src/config",
     "src/services/geminiService.js",
-    "src/services/mlPhishingService.js"
+    "src/services/voicePhishingMLService.js"
   ],
   "ext": "js,json",
   "ignore": [

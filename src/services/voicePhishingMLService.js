@@ -1,8 +1,12 @@
+/**
+ * Voice Phishing ML Service
+ * Analyzes voice call transcripts using ML/CNN-BiLSTM models for phishing detection.
+ */
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-class MLPhishingService {
+class VoicePhishingMLService {
   constructor() {
     this.pythonScriptPath = path.join(__dirname, 'mlPhishingService', 'run_inference.py');
     
@@ -34,7 +38,7 @@ class MLPhishingService {
   async analyzeConversation(transcript, scenarioType, modelType = 'auto') {
     return new Promise((resolve, reject) => {
       try {
-        console.log('ML Phishing Service: Starting analysis...');
+        console.log('Voice Phishing ML Service: Starting analysis...');
         console.log('Transcript length:', transcript?.length || 0);
         console.log('Scenario type:', scenarioType);
         console.log('Model type:', modelType);
@@ -166,11 +170,11 @@ class MLPhishingService {
         });
 
       } catch (error) {
-        console.error('Error in ML Phishing Service:', error);
+        console.error('Error in Voice Phishing ML Service:', error);
         reject(error);
       }
     });
   }
 }
 
-module.exports = new MLPhishingService();
+module.exports = new VoicePhishingMLService();

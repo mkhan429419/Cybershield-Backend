@@ -1,6 +1,6 @@
 const VoicePhishingConversation = require("../models/VoicePhishingConversation");
 const geminiService = require("../services/geminiService");
-const mlPhishingService = require("../services/mlPhishingService");
+const voicePhishingMLService = require("../services/voicePhishingMLService");
 const User = require("../models/User");
 
 // Configuration: Set to 'ml' to use ML model, 'gemini' to use Gemini AI
@@ -327,7 +327,7 @@ const endConversation = async (req, res) => {
           console.log("Using hybrid approach: CNN-BiLSTM + Gemini");
           
           // Get CNN-BiLSTM results (score, resistance, fellForPhishing)
-          const analysisPromise = mlPhishingService.analyzeConversation(
+          const analysisPromise = voicePhishingMLService.analyzeConversation(
             fullTranscript,
             conversation.scenarioType,
             MODEL_TYPE
@@ -474,7 +474,7 @@ const endConversation = async (req, res) => {
           }
         } else {
           // For other model types (ml, ensemble, auto), use standard approach
-          const analysisPromise = mlPhishingService.analyzeConversation(
+          const analysisPromise = voicePhishingMLService.analyzeConversation(
             fullTranscript,
             conversation.scenarioType,
             MODEL_TYPE
