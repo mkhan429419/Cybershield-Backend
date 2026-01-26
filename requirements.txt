@@ -1,0 +1,17 @@
+# ML Pipeline Dependencies for Phishing Detection
+# Python 3.8+ required
+
+# Core ML Libraries
+torch>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Data Processing
+pandas>=2.0.0
+
+# Utilities
+tqdm>=4.65.0
+
+# Optional: For better performance
+# torch-audio  # If needed for audio features
+# torchvision  # If needed for image features

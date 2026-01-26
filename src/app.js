@@ -13,6 +13,7 @@ const emailRoutes = require("./routes/email");
 const emailTemplateRoutes = require("./routes/emailTemplates");
 const whatsAppTemplateRoutes = require("./routes/whatsAppTemplates");
 const campaignRoutes = require("./routes/campaigns");
+const incidentRoutes = require("./routes/incidents");
 
 const app = express();
 
@@ -50,6 +51,7 @@ app.use("/api/email-campaigns", emailRoutes);
 app.use("/api/email-templates", emailTemplateRoutes);
 app.use("/api/whatsapp-templates", whatsAppTemplateRoutes);
 app.use("/api/campaigns", campaignRoutes);
+app.use("/api/incidents", incidentRoutes);
 
 // 404 handler
 app.use((req, res) => {
