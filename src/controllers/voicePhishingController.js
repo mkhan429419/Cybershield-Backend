@@ -1,6 +1,7 @@
 const VoicePhishingConversation = require("../models/VoicePhishingConversation");
 const geminiService = require("../services/geminiService");
 const voicePhishingMLService = require("../services/voicePhishingMLService");
+const translationService = require("../services/translationService");
 const User = require("../models/User");
 
 // Configuration: Set to 'ml' to use ML model, 'gemini' to use Gemini AI
@@ -313,6 +314,30 @@ const endConversation = async (req, res) => {
     console.log("Full transcript length:", fullTranscript?.length || 0);
     console.log("Transcript preview:", fullTranscript?.substring(0, 100) || "empty");
 
+    // Translate transcript to English for ML model analysis (ML models are trained on English)
+    // The CNN-BiLSTM and other ML models only understand English, so we need to translate Hindi transcripts
+    let translatedTranscript = fullTranscript;
+    let translationInfo = { wasTranslated: false, originalLanguage: 'en' };
+    
+    try {
+      const translationResult = await translationService.translateForMLAnalysis(fullTranscript);
+      translatedTranscript = translationResult.translated;
+      translationInfo = {
+        wasTranslated: translationResult.wasTranslated,
+        originalLanguage: translationResult.originalLanguage
+      };
+      
+      if (translationInfo.wasTranslated) {
+        console.log(`📝 Translated transcript from ${translationInfo.originalLanguage} to English for ML analysis`);
+        console.log(`Original preview: ${fullTranscript.substring(0, 100)}...`);
+        console.log(`Translated preview: ${translatedTranscript.substring(0, 100)}...`);
+      }
+    } catch (translationError) {
+      console.warn("⚠️  Translation failed, using original transcript:", translationError.message);
+      // Continue with original transcript if translation fails
+      translatedTranscript = fullTranscript;
+    }
+
     // Analyze conversation using ML model or Gemini AI service
     let analysis;
     try {
@@ -327,8 +352,9 @@ const endConversation = async (req, res) => {
           console.log("Using hybrid approach: CNN-BiLSTM + Gemini");
           
           // Get CNN-BiLSTM results (score, resistance, fellForPhishing)
+          // Use translated transcript for ML model (trained on English)
           const analysisPromise = voicePhishingMLService.analyzeConversation(
-            fullTranscript,
+            translatedTranscript,
             conversation.scenarioType,
             MODEL_TYPE
           );
@@ -341,8 +367,10 @@ const endConversation = async (req, res) => {
           const cnnAnalysis = await Promise.race([analysisPromise, timeoutPromise]);
           
           // Get Gemini results (summary, info types)
+          // Use translated transcript for Gemini to ensure consistent analysis
+          // Gemini can handle multiple languages, but using English ensures better consistency
           const geminiResult = await geminiService.getSummaryAndInfoTypes(
-            fullTranscript,
+            translatedTranscript,
             conversation.scenarioType
           );
           
@@ -474,8 +502,9 @@ const endConversation = async (req, res) => {
           }
         } else {
           // For other model types (ml, ensemble, auto), use standard approach
+          // Use translated transcript for ML model (trained on English)
           const analysisPromise = voicePhishingMLService.analyzeConversation(
-            fullTranscript,
+            translatedTranscript,
             conversation.scenarioType,
             MODEL_TYPE
           );
@@ -490,8 +519,9 @@ const endConversation = async (req, res) => {
         }
       } else {
         console.log("Using Gemini AI for analysis...");
+        // Use translated transcript for Gemini to ensure consistent analysis
         analysis = await geminiService.analyzeConversation(
-          fullTranscript,
+          translatedTranscript,
           conversation.scenarioType
         );
       }
@@ -512,8 +542,9 @@ const endConversation = async (req, res) => {
       if (ANALYSIS_METHOD === 'ml') {
         console.log("ML model failed, falling back to Gemini...");
         try {
+          // Use translated transcript for Gemini fallback too
           analysis = await geminiService.analyzeConversation(
-            fullTranscript,
+            translatedTranscript,
             conversation.scenarioType
           );
           console.log("Gemini fallback successful");
@@ -552,6 +583,18 @@ const endConversation = async (req, res) => {
       resistanceLevel: analysis.analysis.resistanceLevel,
       analysisRationale: analysis.analysis.analysisRationale,
     };
+    
+    // Store translation metadata if transcript was translated
+    if (translationInfo.wasTranslated) {
+      if (!conversation.metadata) {
+        conversation.metadata = {};
+      }
+      conversation.metadata.translation = {
+        wasTranslated: true,
+        originalLanguage: translationInfo.originalLanguage,
+        translatedAt: new Date(),
+      };
+    }
 
     await conversation.save();
 
