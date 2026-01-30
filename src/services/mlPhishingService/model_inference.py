@@ -98,46 +98,46 @@ class PhishingDetectionModel:
                     pass
                 else:
                     processed = tokenize_and_remove_stopwords(clean_text(user_text_only))
-                    text_vector = self.vectorizer.transform([processed])
-                    
-                    # Get feature names
-                    feature_names = self.vectorizer.get_feature_names_out() if hasattr(self.vectorizer, 'get_feature_names_out') else []
-                    
-                    if len(feature_names) > 0:
+                text_vector = self.vectorizer.transform([processed])
+                
+                # Get feature names
+                feature_names = self.vectorizer.get_feature_names_out() if hasattr(self.vectorizer, 'get_feature_names_out') else []
+                
+                if len(feature_names) > 0:
                         # Get features that are ACTIVE in USER text only (model-based!)
-                        sample_features = text_vector.toarray()[0]
-                        active_indices = [i for i, val in enumerate(sample_features) if val > 0]
-                        active_feature_names = [feature_names[i] for i in active_indices]
-                        
-                        # Get importance of active features (what the model learned is important)
-                        importances = self.model.feature_importances_
-                        active_importances = [(i, importances[i]) for i in active_indices if importances[i] > 0.0001]
-                        active_importances.sort(key=lambda x: x[1], reverse=True)
-                        
-                        # Top active features (features present AND important - model learned these!)
-                        top_active = [feature_names[i] for i, _ in active_importances[:30]]
-                        
-                        # Map model-learned features to info types
-                        feature_to_info = {
-                            'password': 'password',
-                            'passcode': 'password',
-                            'pin': 'password',
-                            'cnic': 'cnic',
-                            'national': 'cnic',
-                            'identity': 'cnic',
-                            'account': 'bank_account',
-                            'otp': 'otp',
-                            'verification': 'otp',
-                            'card': 'credit_card',
-                            'cvv': 'credit_card',
-                            'atm': 'atm_pin'
-                        }
-                        
+                    sample_features = text_vector.toarray()[0]
+                    active_indices = [i for i, val in enumerate(sample_features) if val > 0]
+                    active_feature_names = [feature_names[i] for i in active_indices]
+                    
+                    # Get importance of active features (what the model learned is important)
+                    importances = self.model.feature_importances_
+                    active_importances = [(i, importances[i]) for i in active_indices if importances[i] > 0.0001]
+                    active_importances.sort(key=lambda x: x[1], reverse=True)
+                    
+                    # Top active features (features present AND important - model learned these!)
+                    top_active = [feature_names[i] for i, _ in active_importances[:30]]
+                    
+                    # Map model-learned features to info types
+                    feature_to_info = {
+                        'password': 'password',
+                        'passcode': 'password',
+                        'pin': 'password',
+                        'cnic': 'cnic',
+                        'national': 'cnic',
+                        'identity': 'cnic',
+                        'account': 'bank_account',
+                        'otp': 'otp',
+                        'verification': 'otp',
+                        'card': 'credit_card',
+                        'cvv': 'credit_card',
+                        'atm': 'atm_pin'
+                    }
+                    
                         # Check which info-type features the MODEL detected in USER text only
-                        for feature in top_active:
-                            for keyword, info_type in feature_to_info.items():
-                                if keyword in feature.lower() and info_type not in provided_info_types:
-                                    provided_info_types.append(info_type)
+                    for feature in top_active:
+                        for keyword, info_type in feature_to_info.items():
+                            if keyword in feature.lower() and info_type not in provided_info_types:
+                                provided_info_types.append(info_type)
             except Exception as e:
                 # If model-based detection fails, fall back to pattern detection
                 pass
@@ -146,7 +146,7 @@ class PhishingDetectionModel:
         # The model-based approach above should catch most cases, but we have a fallback
         
         # Define sensitive_keywords here so it's always available for pattern detection
-        sensitive_keywords = {
+            sensitive_keywords = {
             'password': ['password', 'passcode', 'pin', 'pass'],
             'cnic': ['cnic', 'national id', 'identity card', 'id card', 'cnic number'],
             'bank_account': ['account number', 'bank account', 'account'],
@@ -203,50 +203,50 @@ class PhishingDetectionModel:
             # Final fallback: use full transcript but be very conservative
             if not user_text or len(user_text.strip()) < 10:
                 user_text = transcript.lower()
-            
+        
             # First, check for explicit patterns (e.g., "my CNIC is 12345")
             for info_type, keywords in sensitive_keywords.items():
                 for keyword in keywords:
                     # Check for explicit patterns
                     patterns = [
-                        f'my {keyword} is',
-                        f'my {keyword}:',
-                        f'the {keyword} is',
-                        f'{keyword} is',
-                        f'{keyword}:',
-                        f'my {keyword}',
-                    ]
-                    
-                    for pattern in patterns:
-                        if pattern in user_text:
-                            idx = user_text.find(pattern)
-                            after = user_text[idx + len(pattern):].strip()
-                            
-                            # Skip if negative context
-                            if any(after.startswith(neg) for neg in negative_indicators):
-                                continue
-                            
-                            # Check context before pattern for negatives
-                            before = user_text[max(0, idx - 30):idx]
-                            if any(neg in before for neg in negative_indicators):
-                                continue
-                            
-                            # Check if followed by actual data
-                            if len(after) > 0:
-                                # Check for numbers
-                                if any(c.isdigit() for c in after[:30]):
-                                    numbers = [w for w in after.split()[:3] if any(c.isdigit() for c in w)]
-                                    if numbers and len(numbers[0]) >= 3:
-                                        if info_type not in provided_info_types:
-                                            provided_info_types.append(info_type)
-                                        break
-                                # Check for meaningful text
-                                first_word = after.split()[0].lower() if after.split() else ""
-                                if first_word and first_word not in ['though', 'but', 'however', 'i', 'we', 'the', 'a', 'an']:
-                                    if len(first_word) >= 4:
-                                        if info_type not in provided_info_types:
-                                            provided_info_types.append(info_type)
-                                        break
+                    f'my {keyword} is',
+                    f'my {keyword}:',
+                    f'the {keyword} is',
+                    f'{keyword} is',
+                    f'{keyword}:',
+                    f'my {keyword}',
+                ]
+                
+                for pattern in patterns:
+                    if pattern in user_text:
+                        idx = user_text.find(pattern)
+                        after = user_text[idx + len(pattern):].strip()
+                        
+                        # Skip if negative context
+                        if any(after.startswith(neg) for neg in negative_indicators):
+                            continue
+                        
+                        # Check context before pattern for negatives
+                        before = user_text[max(0, idx - 30):idx]
+                        if any(neg in before for neg in negative_indicators):
+                            continue
+                        
+                        # Check if followed by actual data
+                        if len(after) > 0:
+                            # Check for numbers
+                            if any(c.isdigit() for c in after[:30]):
+                                numbers = [w for w in after.split()[:3] if any(c.isdigit() for c in w)]
+                                if numbers and len(numbers[0]) >= 3:
+                                    if info_type not in provided_info_types:
+                                        provided_info_types.append(info_type)
+                                    break
+                            # Check for meaningful text
+                            first_word = after.split()[0].lower() if after.split() else ""
+                            if first_word and first_word not in ['though', 'but', 'however', 'i', 'we', 'the', 'a', 'an']:
+                                if len(first_word) >= 4:
+                                    if info_type not in provided_info_types:
+                                        provided_info_types.append(info_type)
+                                    break
             
             # Second, check for implicit patterns (agent asked for X, user provided numbers/text)
             # This handles cases like: Agent: "What's your CNIC?" User: "It's 123456789"

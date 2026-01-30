@@ -145,3 +145,21 @@ config/production.json
 test-results/
 playwright-report/
 test-results.xml
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ML model artifacts
+*.pkl
+*.pth
+*.h5
+*.hdf5
+*.pt
+*.ckpt
+*.safetensors

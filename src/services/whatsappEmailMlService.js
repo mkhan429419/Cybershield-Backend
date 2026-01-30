@@ -6,12 +6,30 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const RUNNER_SCRIPT = path.join(__dirname, '..', 'ml_pipeline', 'run_inference.py');
 const BACKEND_ROOT = path.join(__dirname, '..', '..');
 
 class WhatsappEmailMlService {
-  constructor() {}
+  constructor() {
+    // Determine Python executable - prefer python3, fallback to python
+    this.pythonExecutable = process.env.PYTHON_PATH || 'python3';
+    
+    // Verify Python is available
+    try {
+      const { execSync } = require('child_process');
+      execSync(`${this.pythonExecutable} --version`, { stdio: 'ignore' });
+    } catch (error) {
+      // Try python as fallback
+      try {
+        execSync('python --version', { stdio: 'ignore' });
+        this.pythonExecutable = 'python';
+      } catch (e) {
+        console.warn(`Warning: Python executable not found. Using: ${this.pythonExecutable}`);
+      }
+    }
+  }
 
   /**
    * Predict phishing probability for a user-reported incident using ML pipeline only.
@@ -40,7 +58,7 @@ class WhatsappEmailMlService {
    */
   _callPythonPredictor(incidentData) {
     return new Promise((resolve, reject) => {
-      const python = spawn('python', [RUNNER_SCRIPT], {
+      const python = spawn(this.pythonExecutable, [RUNNER_SCRIPT], {
         cwd: BACKEND_ROOT,
         env: { ...process.env, PYTHONPATH: path.join(BACKEND_ROOT, 'src') },
       });
@@ -86,7 +104,7 @@ class WhatsappEmailMlService {
   async extractFeatures(incidentData) {
     const extractScript = path.join(__dirname, '..', 'ml_pipeline', 'run_extract_features.py');
     try {
-      const python = spawn('python', [extractScript], {
+      const python = spawn(this.pythonExecutable, [extractScript], {
         cwd: BACKEND_ROOT,
         env: { ...process.env, PYTHONPATH: path.join(BACKEND_ROOT, 'src') },
       });
