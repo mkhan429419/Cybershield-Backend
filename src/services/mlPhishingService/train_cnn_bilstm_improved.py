@@ -96,7 +96,7 @@ def train_cnn_bilstm_improved(
     max_words: int = 50000,
     embed_dim: int = 300,
     batch_size: int = 32,
-    epochs: int = 25,  # Increased to learn resistance patterns better
+    epochs: int = 100,  # Increased for maximum accuracy
     validation_split: float = 0.2
 ):
     """Train CNN-BiLSTM model with improved methodology."""
@@ -200,7 +200,7 @@ def train_cnn_bilstm_improved(
     )
     early_stopping = EarlyStopping(
         monitor='val_loss',
-        patience=8,  # Increased patience to allow more learning
+        patience=15,  # Increased patience to allow more learning with higher epochs
         restore_best_weights=True,
         verbose=1
     )
@@ -339,7 +339,7 @@ def main():
             max_length=200,
             max_words=50000,
             batch_size=32,
-            epochs=15
+            epochs=100  # Increased for maximum accuracy
         )
     except Exception as e:
         import traceback
