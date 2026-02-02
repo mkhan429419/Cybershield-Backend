@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "is_phishing": true,
+  "phishing_probability": 0.561,
+  "legitimate_probability": 0.439,
+  "confidence": 0.1221,
+  "fusion_method": "weighted_ensemble",
+  "model_predictions": {
+    "email": {
+      "phishing_probability": 0.5391,
+      "confidence": 0.0783,
+      "is_phishing": true
+    },
+    "whatsapp": {
+      "phishing_probability": 0.583,
+      "confidence": 0.1659,
+      "is_phishing": true
+    }
+  },
+  "model_weights": {
+    "email": 0.33,
+    "whatsapp": 0.33,
+    "voice": 0.34
+  },
+  "features_extracted": true
+}

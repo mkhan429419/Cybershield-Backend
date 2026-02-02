@@ -1,5 +1,9 @@
 const whatsappEmailMlService = require("../services/whatsappEmailMlService");
+const fusionMlService = require("../services/fusionMlService");
 const Incident = require("../models/Incident");
+
+// Use fusion model by default, can be overridden with USE_FUSION_MODEL=false
+const USE_FUSION_MODEL = process.env.USE_FUSION_MODEL !== 'false';
 
 /**
  * Analyze a reported incident (email or WhatsApp) using ML pipeline only.
@@ -33,8 +37,15 @@ async function analyzeIncident(req, res) {
       timestamp: body.timestamp || body.date || new Date().toISOString(),
     };
 
-    const formatted = whatsappEmailMlService.formatIncidentForML(reportData);
-    const result = await whatsappEmailMlService.predictIncident(formatted);
+    // Use fusion model if enabled, otherwise use individual model
+    let result;
+    if (USE_FUSION_MODEL) {
+      const formatted = fusionMlService.formatIncidentForML(reportData);
+      result = await fusionMlService.predictIncident(formatted);
+    } else {
+      const formatted = whatsappEmailMlService.formatIncidentForML(reportData);
+      result = await whatsappEmailMlService.predictIncident(formatted);
+    }
 
     // Save incident to MongoDB database
     const userId = req.user?._id || null;

@@ -1,8 +1,12 @@
 const VoicePhishingConversation = require("../models/VoicePhishingConversation");
 const geminiService = require("../services/geminiService");
 const voicePhishingMLService = require("../services/voicePhishingMLService");
+const fusionMlService = require("../services/fusionMlService");
 const translationService = require("../services/translationService");
 const User = require("../models/User");
+
+// Use fusion model by default, can be overridden with USE_FUSION_MODEL=false
+const USE_FUSION_MODEL = process.env.USE_FUSION_MODEL !== 'false';
 
 // Configuration: Set to 'ml' to use ML model, 'gemini' to use Gemini AI
 const ANALYSIS_METHOD = process.env.VOICE_PHISHING_ANALYSIS_METHOD || 'ml';
@@ -346,9 +350,104 @@ const endConversation = async (req, res) => {
         console.log("Transcript length:", fullTranscript?.length || 0);
         console.log("Scenario type:", conversation.scenarioType);
         console.log("Model type:", MODEL_TYPE);
+        console.log("Using fusion model:", USE_FUSION_MODEL);
         
-        // Hybrid approach: Use CNN-BiLSTM for score/resistance, Gemini for summary/info types
-        if (MODEL_TYPE === 'cnn_bilstm') {
+        let cnnAnalysis;
+        
+        // Use fusion model if enabled, otherwise use individual voice model
+        if (USE_FUSION_MODEL) {
+          console.log("Using fusion model (combines Email, WhatsApp, and Voice models)");
+          
+          // Get fusion model results (combines all 3 models)
+          // Use translated transcript for ML model (trained on English)
+          const analysisPromise = fusionMlService.analyzeVoiceConversation(
+            translatedTranscript,
+            conversation.scenarioType
+          );
+          
+          // Set a timeout of 60 seconds for ML analysis
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Fusion analysis timed out after 60 seconds')), 60000);
+          });
+          
+          const fusionAnalysis = await Promise.race([analysisPromise, timeoutPromise]);
+          
+          console.log('Fusion analysis result:', JSON.stringify(fusionAnalysis, null, 2).substring(0, 1000));
+          
+          if (!fusionAnalysis || !fusionAnalysis.success) {
+            throw new Error(fusionAnalysis?.error || 'Fusion analysis failed');
+          }
+          
+          // Convert fusion result to expected format
+          cnnAnalysis = {
+            success: fusionAnalysis.success,
+            analysis: {
+              fellForPhishing: fusionAnalysis.is_phishing || false,
+              providedSensitiveInfo: fusionAnalysis.is_phishing || false,
+              sensitiveInfoTypes: [],
+              resistanceLevel: fusionAnalysis.is_phishing ? "low" : "high",
+              score: fusionAnalysis.is_phishing 
+                ? Math.max(0, Math.floor(100 * (1 - (fusionAnalysis.phishing_probability || 0.5))))
+                : Math.min(100, Math.floor(50 + 50 * (fusionAnalysis.confidence || 0.5))),
+              analysisRationale: `Fusion model prediction (${fusionAnalysis.fusion_method || 'stacked_fusion'}): ${fusionAnalysis.is_phishing ? 'Phishing detected' : 'Legitimate'}. Confidence: ${((fusionAnalysis.confidence || 0) * 100).toFixed(1)}%`,
+              modelPrediction: fusionAnalysis.is_phishing ? 1 : 0,
+              modelConfidence: fusionAnalysis.confidence || 0.5,
+              modelType: 'fusion',
+              isFullyModelBased: true
+            }
+          };
+          
+          // Get Gemini results (summary, info types) - always use Gemini for detailed analysis
+          const geminiResult = await geminiService.getSummaryAndInfoTypes(
+            translatedTranscript,
+            conversation.scenarioType
+          );
+          
+          // Combine fusion results with Gemini for detailed info
+          if (cnnAnalysis && cnnAnalysis.success && geminiResult.success) {
+            // Use Gemini's info types to determine if sensitive info was provided
+            const hasSensitiveInfo = geminiResult.sensitiveInfoTypes && geminiResult.sensitiveInfoTypes.length > 0;
+            
+            // Calculate final score and resistance based on fusion + Gemini
+            let finalScore = cnnAnalysis.analysis.score;
+            let finalResistanceLevel = cnnAnalysis.analysis.resistanceLevel;
+            let finalFellForPhishing = cnnAnalysis.analysis.fellForPhishing;
+            
+            // Adjust based on what info was actually provided
+            if (hasSensitiveInfo) {
+              finalFellForPhishing = true;
+              finalResistanceLevel = 'low';
+              // Lower score if sensitive info was provided
+              finalScore = Math.max(0, Math.min(30, finalScore - 10));
+            } else if (!hasSensitiveInfo && cnnAnalysis.analysis.fellForPhishing) {
+              // Fusion said phishing but no info provided - might be resistance
+              finalFellForPhishing = false;
+              finalResistanceLevel = 'high';
+              finalScore = Math.max(60, finalScore + 20);
+            }
+            
+            // Set the analysis object
+            analysis = {
+              success: true,
+              analysis: {
+                score: finalScore,
+                fellForPhishing: finalFellForPhishing,
+                resistanceLevel: finalResistanceLevel,
+                modelPrediction: cnnAnalysis.analysis.modelPrediction,
+                modelConfidence: cnnAnalysis.analysis.modelConfidence,
+                modelType: 'fusion_hybrid',
+                providedSensitiveInfo: hasSensitiveInfo,
+                sensitiveInfoTypes: geminiResult.sensitiveInfoTypes || [],
+                analysisRationale: geminiResult.analysisRationale || cnnAnalysis.analysis.analysisRationale,
+              }
+            };
+            console.log("Fusion + Gemini hybrid analysis completed successfully");
+          } else {
+            // Fallback to fusion only if Gemini fails
+            console.warn("Gemini failed, using fusion results only");
+            analysis = cnnAnalysis;
+          }
+        } else if (MODEL_TYPE === 'cnn_bilstm') {
           console.log("Using hybrid approach: CNN-BiLSTM + Gemini");
           
           // Get CNN-BiLSTM results (score, resistance, fellForPhishing)
@@ -364,7 +463,7 @@ const endConversation = async (req, res) => {
             setTimeout(() => reject(new Error('ML analysis timed out after 60 seconds')), 60000);
           });
           
-          const cnnAnalysis = await Promise.race([analysisPromise, timeoutPromise]);
+          cnnAnalysis = await Promise.race([analysisPromise, timeoutPromise]);
           
           // Get Gemini results (summary, info types)
           // Use translated transcript for Gemini to ensure consistent analysis
@@ -374,8 +473,8 @@ const endConversation = async (req, res) => {
             conversation.scenarioType
           );
           
-          // Combine results: CNN-BiLSTM for score/resistance, Gemini for summary/info types
-          if (cnnAnalysis.success && geminiResult.success) {
+          // Combine results: Fusion/ML model for score/resistance, Gemini for summary/info types
+          if (cnnAnalysis && cnnAnalysis.success && geminiResult.success) {
             // Use Gemini's info types to determine if sensitive info was provided
             const hasSensitiveInfo = geminiResult.sensitiveInfoTypes && geminiResult.sensitiveInfoTypes.length > 0;
             
@@ -527,6 +626,7 @@ const endConversation = async (req, res) => {
       }
     } catch (error) {
       console.error("Analysis error:", error);
+      console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
       analysis = {
         success: false,
@@ -536,6 +636,7 @@ const endConversation = async (req, res) => {
 
     if (!analysis || !analysis.success) {
       console.error("Analysis failed:", analysis?.error || "Unknown error");
+      console.error("Analysis object:", analysis);
       console.error("Full analysis object:", JSON.stringify(analysis, null, 2));
       
       // Fallback to Gemini if ML model fails

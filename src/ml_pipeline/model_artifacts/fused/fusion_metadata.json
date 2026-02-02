@@ -1,0 +1,15 @@
+{
+  "fusion_method": "simple_average",
+  "fused_models": [
+    "email",
+    "whatsapp"
+  ],
+  "voice_model": {
+    "included": false,
+    "reason": "TensorFlow model - using ensemble approach at inference time",
+    "model_path": "/Users/maheenkhan/Documents/Cybershield/Cybershield-Backend/src/services/mlPhishingService/models/cnn_bilstm_model.h5"
+  },
+  "output_path": "/Users/maheenkhan/Documents/Cybershield/Cybershield-Backend/src/ml_pipeline/model_artifacts/fused/fused_phishing_detector.pth",
+  "scaler_path": "/Users/maheenkhan/Documents/Cybershield/Cybershield-Backend/src/ml_pipeline/model_artifacts/fused/fused_phishing_detector_scaler.pkl",
+  "fusion_date": "1769934842.6263766"
+}
