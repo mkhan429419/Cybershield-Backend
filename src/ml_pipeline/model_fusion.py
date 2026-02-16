@@ -251,6 +251,30 @@ class UnifiedPhishingFusion:
                     if hidden_dims == [32, 16] or len(hidden_dims) < 3:
                         hidden_dims = [384, 192, 96, 48]
                         print(f"Warning: Using default advanced fusion hidden_dims {hidden_dims} instead of simple config")
+                    
+                    # CRITICAL FIX: Infer hidden_dims from saved state_dict if available
+                    # This handles cases where the saved model has different architecture than config
+                    if "model_state_dict" in checkpoint:
+                        state_dict = checkpoint["model_state_dict"]
+                        # Check classifier_layers to infer hidden_dims
+                        if "classifier_layers.0.0.weight" in state_dict:
+                            classifier_weight = state_dict["classifier_layers.0.0.weight"]
+                            # Shape is [output_dim, input_dim]
+                            inferred_output_dim = classifier_weight.shape[0]
+                            inferred_input_dim = classifier_weight.shape[1]
+                            # inferred_input_dim should match hidden_dims[0]
+                            if inferred_input_dim != hidden_dims[0]:
+                                print(f"Warning: Config says hidden_dims[0]={hidden_dims[0]}, but state_dict has {inferred_input_dim}. Updating...")
+                                hidden_dims[0] = inferred_input_dim
+                            # inferred_output_dim should match hidden_dims[1] (if it exists)
+                            if len(hidden_dims) > 1 and inferred_output_dim != hidden_dims[1]:
+                                print(f"Warning: Config says hidden_dims[1]={hidden_dims[1]}, but state_dict has {inferred_output_dim}. Updating...")
+                                if len(hidden_dims) > 1:
+                                    hidden_dims[1] = inferred_output_dim
+                                else:
+                                    hidden_dims.append(inferred_output_dim)
+                            print(f"Inferred hidden_dims from state_dict: {hidden_dims}")
+                    
                     # Ensure embed_dim is divisible by num_heads
                     if embed_dim % num_heads != 0:
                         embed_dim = (embed_dim // num_heads) * num_heads
@@ -346,13 +370,41 @@ class UnifiedPhishingFusion:
                         self.meta_learner.load_state_dict(state_dict, strict=True)
                         print("✅ Model loaded successfully with strict=True")
                     except RuntimeError as e:
-                        # If strict loading fails, try with strict=False
+                        # If strict loading fails, filter out size-mismatched parameters
                         print(f"Warning: Strict loading failed, trying lenient: {str(e)[:200]}...")
-                        missing_keys, unexpected_keys = self.meta_learner.load_state_dict(state_dict, strict=False)
+                        
+                        # Filter state_dict to remove size-mismatched parameters
+                        model_state = self.meta_learner.state_dict()
+                        filtered_state_dict = {}
+                        size_mismatches = []
+                        
+                        for key, value in state_dict.items():
+                            if key in model_state:
+                                if model_state[key].shape == value.shape:
+                                    filtered_state_dict[key] = value
+                                else:
+                                    size_mismatches.append(f"{key}: checkpoint {value.shape} vs model {model_state[key].shape}")
+                            # If key not in model, it's an unexpected key (will be ignored)
+                        
+                        if size_mismatches:
+                            print(f"  Filtered out {len(size_mismatches)} size-mismatched parameters:")
+                            for mismatch in size_mismatches[:5]:  # Show first 5
+                                print(f"    - {mismatch}")
+                            if len(size_mismatches) > 5:
+                                print(f"    ... and {len(size_mismatches) - 5} more")
+                        
+                        # Load filtered state_dict
+                        missing_keys, unexpected_keys = self.meta_learner.load_state_dict(filtered_state_dict, strict=False)
                         if missing_keys:
                             print(f"  Missing keys (will use random init): {len(missing_keys)} keys")
+                            if len(missing_keys) <= 10:
+                                for key in missing_keys:
+                                    print(f"    - {key}")
                         if unexpected_keys:
                             print(f"  Unexpected keys (ignored): {len(unexpected_keys)} keys")
+                            if len(unexpected_keys) <= 10:
+                                for key in unexpected_keys:
+                                    print(f"    - {key}")
                         print("✅ Model loaded with lenient mode (some weights may be randomly initialized)")
                 
                 self.meta_learner.eval()

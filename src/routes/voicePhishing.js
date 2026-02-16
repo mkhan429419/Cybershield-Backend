@@ -19,10 +19,12 @@ router.post("/initiate", initiateConversation);
 router.post("/:conversationId/transcript", updateTranscript);
 router.post("/:conversationId/end", endConversation);
 router.get("/", getConversations);
-router.get("/:conversationId", getConversation);
 
-// Admin routes (analytics)
+// Admin routes (analytics) - must be before /:conversationId to avoid route conflicts
 router.get("/analytics/overview", getConversationAnalytics);
+
+// Get specific conversation - must be last to avoid conflicts with other routes
+router.get("/:conversationId", getConversation);
 
 module.exports = router;
 

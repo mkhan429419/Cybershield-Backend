@@ -125,11 +125,18 @@ class ElevenLabsService {
 
   /**
    * Get conversation history
+   * Uses the official ElevenLabs API: GET /v1/convai/conversations/:conversation_id
    */
   async getConversationHistory(conversationId) {
     try {
-      const url = `${this.baseURL}/convai/conversation/history/${conversationId}`;
+      if (!this.apiKey) {
+        return {
+          success: false,
+          error: "ElevenLabs API key is not configured",
+        };
+      }
 
+      const url = `${this.baseURL}/convai/conversations/${conversationId}`;
       const response = await axios.get(url, {
         headers: {
           "xi-api-key": this.apiKey,
@@ -145,6 +152,63 @@ class ElevenLabsService {
       return {
         success: false,
         error: error.response?.data?.detail?.message || error.message,
+      };
+    }
+  }
+
+  /**
+   * Get conversation recording/audio
+   * Uses the official ElevenLabs API: GET /v1/convai/conversations/:conversation_id/audio
+   */
+  async getConversationRecording(conversationId) {
+    try {
+      if (!this.apiKey) {
+        return {
+          success: false,
+          error: "ElevenLabs API key is not configured",
+        };
+      }
+
+      // Use the official ElevenLabs API endpoint for conversation audio
+      // GET /v1/convai/conversations/:conversation_id/audio
+      const audioEndpoint = `${this.baseURL}/convai/conversations/${conversationId}/audio`;
+      
+      const audioResponse = await axios.get(audioEndpoint, {
+        headers: {
+          "xi-api-key": this.apiKey,
+          "Content-Type": "application/json",
+        },
+        responseType: 'arraybuffer', // Get binary audio data (MP3)
+      });
+      
+      if (audioResponse.data && audioResponse.data.byteLength > 0) {
+        // Convert binary MP3 data to base64 data URL for frontend playback
+        const audioBuffer = Buffer.from(audioResponse.data);
+        const base64Audio = audioBuffer.toString('base64');
+        const recordingUrl = `data:audio/mpeg;base64,${base64Audio}`;
+        
+        return {
+          success: true,
+          recordingUrl: recordingUrl,
+        };
+      } else {
+        return {
+          success: false,
+          error: "Audio endpoint returned empty data",
+        };
+      }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          error: "Audio not available for this conversation",
+        };
+      }
+      
+      console.error("Error getting conversation recording:", error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data?.detail?.message || error.message || "Failed to fetch audio",
       };
     }
   }

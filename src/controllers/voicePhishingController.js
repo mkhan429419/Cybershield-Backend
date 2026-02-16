@@ -671,6 +671,24 @@ const endConversation = async (req, res) => {
       }
     }
 
+    // Try to fetch recording URL from ElevenLabs before saving
+    let recordingUrl = null;
+    if (conversation.elevenLabsConversationId) {
+      try {
+        const elevenLabsService = require("../services/elevenLabsService");
+        const recordingResult = await elevenLabsService.getConversationRecording(
+          conversation.elevenLabsConversationId
+        );
+        
+        if (recordingResult.success && recordingResult.recordingUrl) {
+          recordingUrl = recordingResult.recordingUrl;
+        }
+      } catch (recordingError) {
+        // Don't fail the request if recording fetch fails
+        console.warn("Failed to fetch recording when ending conversation:", recordingError.message);
+      }
+    }
+
     // Update conversation with analysis results
     conversation.status = "completed";
     conversation.endedAt = new Date();
@@ -684,6 +702,14 @@ const endConversation = async (req, res) => {
       resistanceLevel: analysis.analysis.resistanceLevel,
       analysisRationale: analysis.analysis.analysisRationale,
     };
+    
+    // Store recording URL in metadata if available
+    if (recordingUrl) {
+      if (!conversation.metadata) {
+        conversation.metadata = {};
+      }
+      conversation.metadata.recordingUrl = recordingUrl;
+    }
     
     // Store translation metadata if transcript was translated
     if (translationInfo.wasTranslated) {
@@ -797,9 +823,40 @@ const getConversation = async (req, res) => {
       });
     }
 
+    // Try to fetch recording from ElevenLabs if conversation ID exists
+    let recordingUrl = null;
+    if (conversation.elevenLabsConversationId) {
+      try {
+        const elevenLabsService = require("../services/elevenLabsService");
+        const recordingResult = await elevenLabsService.getConversationRecording(
+          conversation.elevenLabsConversationId
+        );
+        
+        if (recordingResult.success && recordingResult.recordingUrl) {
+          recordingUrl = recordingResult.recordingUrl;
+        }
+      } catch (recordingError) {
+        // Don't fail the request if recording fetch fails
+        console.warn("Failed to fetch recording from ElevenLabs:", recordingError.message);
+      }
+    }
+
+    // Convert to plain object and add recording URL
+    const conversationData = conversation.toObject();
+    
+    // Check multiple sources for recording URL
+    // 1. From fresh API call
+    // 2. From metadata (saved when conversation ended)
+    const metadataRecordingUrl = conversationData.metadata?.recordingUrl;
+    const finalRecordingUrl = recordingUrl || metadataRecordingUrl;
+    
+    if (finalRecordingUrl) {
+      conversationData.recordingUrl = finalRecordingUrl;
+    }
+
     res.json({
       success: true,
-      data: conversation,
+      data: conversationData,
     });
   } catch (error) {
     console.error("Get Conversation Error:", error);
