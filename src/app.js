@@ -15,6 +15,7 @@ const whatsAppTemplateRoutes = require("./routes/whatsAppTemplates");
 const voicePhishingTemplateRoutes = require("./routes/voicePhishingTemplates");
 const campaignRoutes = require("./routes/campaigns");
 const incidentRoutes = require("./routes/incidents");
+const chatRoutes = require("./routes/chat");
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use("/api/whatsapp-templates", whatsAppTemplateRoutes);
 app.use("/api/voice-phishing-templates", voicePhishingTemplateRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/incidents", incidentRoutes);
+app.use("/api/chat", chatRoutes);
 
 // 404 handler
 app.use((req, res) => {
