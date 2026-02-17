@@ -1,4 +1,5 @@
 const VoicePhishingConversation = require("../models/VoicePhishingConversation");
+const VoicePhishingTemplate = require("../models/VoicePhishingTemplate");
 const geminiService = require("../services/geminiService");
 const voicePhishingMLService = require("../services/voicePhishingMLService");
 const fusionMlService = require("../services/fusionMlService");
@@ -125,18 +126,142 @@ const NORMAL_SCENARIOS = [
 /**
  * Get a random scenario with weighted selection
  * 70% chance of phishing scenario, 30% chance of normal scenario
+ * Now includes templates from database based on user's organization
  */
-function getRandomScenario() {
+async function getRandomScenario(user) {
   const random = Math.random();
+  const scenarioType = random < 0.7 ? "phishing" : "normal";
   
-  // 70% chance for phishing, 30% chance for normal
-  if (random < 0.7) {
-    // Select random phishing scenario
-    return PHISHING_SCENARIOS[Math.floor(Math.random() * PHISHING_SCENARIOS.length)];
-  } else {
-    // Select random normal scenario
-    return NORMAL_SCENARIOS[Math.floor(Math.random() * NORMAL_SCENARIOS.length)];
+  console.log("🎲 [Scenario Selection] Starting scenario selection:", {
+    userId: user._id?.toString(),
+    userRole: user.role,
+    organizationId: user.orgId?.toString() || "null (non-affiliated)",
+    selectedType: scenarioType,
+    randomValue: random.toFixed(3),
+  });
+  
+  // Get templates from database based on user's organization
+  let templates = [];
+  
+  try {
+    const templateQuery = {
+      type: scenarioType,
+      isActive: true,
+    };
+    
+    // If user has an organization, get templates for that organization
+    // If user doesn't have an organization (non-affiliated), get system admin templates (organizationId: null)
+    if (user.orgId) {
+      templateQuery.organizationId = user.orgId;
+    } else {
+      // Non-affiliated users get system admin templates (organizationId: null)
+      templateQuery.organizationId = null;
+    }
+    
+    console.log("📋 [Scenario Selection] Template query:", {
+      type: templateQuery.type,
+      organizationId: templateQuery.organizationId?.toString() || "null",
+      isActive: templateQuery.isActive,
+    });
+    
+    templates = await VoicePhishingTemplate.find(templateQuery);
+    
+    console.log("📚 [Scenario Selection] Templates found:", {
+      count: templates.length,
+      templateIds: templates.map(t => t._id.toString()),
+      templateDescriptions: templates.map(t => t.description),
+    });
+  } catch (error) {
+    console.error("❌ [Scenario Selection] Error fetching templates:", error);
+    // Continue with default scenarios if template fetch fails
   }
+  
+  // Combine templates with default scenarios
+  let availableScenarios = [];
+  const defaultScenariosCount = scenarioType === "phishing" ? PHISHING_SCENARIOS.length : NORMAL_SCENARIOS.length;
+  
+  if (scenarioType === "phishing") {
+    // Add default phishing scenarios
+    availableScenarios = [...PHISHING_SCENARIOS];
+  } else {
+    // Add default normal scenarios
+    availableScenarios = [...NORMAL_SCENARIOS];
+  }
+  
+  console.log("📖 [Scenario Selection] Default scenarios:", {
+    type: scenarioType,
+    count: defaultScenariosCount,
+    descriptions: availableScenarios.map(s => s.description),
+  });
+  
+  // Add templates to available scenarios
+  templates.forEach((template) => {
+    availableScenarios.push({
+      type: template.type,
+      description: template.description,
+      firstMessage: template.firstMessage,
+      isTemplate: true, // Flag to identify template scenarios
+      templateId: template._id.toString(),
+    });
+  });
+  
+  console.log("🔀 [Scenario Selection] Combined scenario pool:", {
+    totalScenarios: availableScenarios.length,
+    defaultScenarios: defaultScenariosCount,
+    templateScenarios: templates.length,
+    allDescriptions: availableScenarios.map(s => ({
+      description: s.description,
+      source: s.isTemplate ? "template" : "default",
+      templateId: s.templateId || "N/A",
+    })),
+  });
+  
+  // Select random scenario from combined list
+  if (availableScenarios.length === 0) {
+    console.warn("⚠️ [Scenario Selection] No scenarios available, using fallback");
+    // Fallback to default scenarios if no templates found
+    if (scenarioType === "phishing") {
+      const fallbackScenario = PHISHING_SCENARIOS[Math.floor(Math.random() * PHISHING_SCENARIOS.length)];
+      console.log("✅ [Scenario Selection] Selected fallback scenario:", {
+        type: fallbackScenario.type,
+        description: fallbackScenario.description,
+        firstMessage: fallbackScenario.firstMessage?.substring(0, 100) + "...",
+        source: "default (fallback)",
+      });
+      return fallbackScenario;
+    } else {
+      const fallbackScenario = NORMAL_SCENARIOS[Math.floor(Math.random() * NORMAL_SCENARIOS.length)];
+      console.log("✅ [Scenario Selection] Selected fallback scenario:", {
+        type: fallbackScenario.type,
+        description: fallbackScenario.description,
+        firstMessage: fallbackScenario.firstMessage?.substring(0, 100) + "...",
+        source: "default (fallback)",
+      });
+      return fallbackScenario;
+    }
+  }
+  
+  const selectedIndex = Math.floor(Math.random() * availableScenarios.length);
+  const selectedScenario = availableScenarios[selectedIndex];
+  
+  console.log("✅ [Scenario Selection] Selected scenario:", {
+    index: selectedIndex,
+    type: selectedScenario.type,
+    description: selectedScenario.description,
+    firstMessage: selectedScenario.firstMessage?.substring(0, 100) + (selectedScenario.firstMessage?.length > 100 ? "..." : ""),
+    source: selectedScenario.isTemplate ? "template" : "default",
+    templateId: selectedScenario.templateId || "N/A",
+    totalPoolSize: availableScenarios.length,
+  });
+  
+  // Remove the metadata we added for logging before returning
+  const cleanScenario = {
+    type: selectedScenario.type,
+    description: selectedScenario.description,
+    firstMessage: selectedScenario.firstMessage,
+  };
+  
+  return cleanScenario;
 }
 
 /**
@@ -149,8 +274,17 @@ const initiateConversation = async (req, res) => {
     const userId = req.user._id;
     const connectionType = req.body.connectionType || "webrtc"; // "webrtc" or "websocket"
 
-    // Get a random scenario
-    const scenario = getRandomScenario();
+    // Get a random scenario (now includes templates from database)
+    const scenario = await getRandomScenario(req.user);
+    
+    console.log("🎯 [Initiate Conversation] Scenario selected for conversation:", {
+      userId: userId.toString(),
+      userRole: req.user.role,
+      organizationId: req.user.orgId?.toString() || "null",
+      scenarioType: scenario.type,
+      scenarioDescription: scenario.description,
+      firstMessage: scenario.firstMessage?.substring(0, 100) + (scenario.firstMessage?.length > 100 ? "..." : ""),
+    });
     
     // Use single agent ID from environment (just for reference, frontend will use it)
     const agentId = process.env.ELEVENLABS_AGENT_ID;

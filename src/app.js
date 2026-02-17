@@ -12,6 +12,7 @@ const voicePhishingRoutes = require("./routes/voicePhishing");
 const emailRoutes = require("./routes/email");
 const emailTemplateRoutes = require("./routes/emailTemplates");
 const whatsAppTemplateRoutes = require("./routes/whatsAppTemplates");
+const voicePhishingTemplateRoutes = require("./routes/voicePhishingTemplates");
 const campaignRoutes = require("./routes/campaigns");
 const incidentRoutes = require("./routes/incidents");
 
@@ -50,6 +51,7 @@ app.use("/api/voice-phishing", voicePhishingRoutes);
 app.use("/api/email-campaigns", emailRoutes);
 app.use("/api/email-templates", emailTemplateRoutes);
 app.use("/api/whatsapp-templates", whatsAppTemplateRoutes);
+app.use("/api/voice-phishing-templates", voicePhishingTemplateRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/incidents", incidentRoutes);
 
