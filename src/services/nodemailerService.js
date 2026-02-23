@@ -6,11 +6,11 @@ const getTransporter = () => {
   if (transporter) return transporter;
 
   const smtpUser = process.env.SMTP_USER;
-  const smtpPassword = process.env.SMTP_PASSWORD;
+  // Brevo uses SMTP_KEY; fallback to SMTP_PASSWORD for other providers
+  const smtpPass = process.env.SMTP_KEY || process.env.SMTP_PASSWORD;
   const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = parseInt(process.env.SMTP_PORT);
+  const smtpPort = parseInt(process.env.SMTP_PORT, 10);
 
-  // FIX: Only use secure for port 465
   const smtpSecure = smtpPort === 465;
 
   transporter = nodemailer.createTransport({
@@ -19,7 +19,7 @@ const getTransporter = () => {
     secure: smtpSecure,
     auth: {
       user: smtpUser,
-      pass: smtpPassword,
+      pass: smtpPass,
     },
   });
 
@@ -29,15 +29,21 @@ const getTransporter = () => {
 
 const sendEmail = async (emailData) => {
   try {
-    const { to, from, subject, html } = emailData;
+    const { to, subject, html } = emailData;
 
-    if (!to || !from || !subject || !html) {
-      throw new Error("Missing required fields: to, from, subject, html");
+    if (!to || !subject || !html) {
+      throw new Error("Missing required fields: to, subject, html");
+    }
+
+    // Brevo: SMTP_USER = SMTP login (auth); SMTP_FROM = verified sender (visible "from"). Fallback to SMTP_USER if SMTP_FROM not set.
+    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+    if (!fromAddress) {
+      throw new Error("SMTP_USER or SMTP_FROM must be set in .env");
     }
 
     const transporter = getTransporter();
     const info = await transporter.sendMail({
-      from: from,
+      from: fromAddress,
       to: to,
       subject: subject,
       html: html,

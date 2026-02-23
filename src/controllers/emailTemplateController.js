@@ -100,9 +100,54 @@ const createEmailTemplate = async (req, res) => {
   }
 };
 
+const DEFAULT_EMAIL_TEMPLATE_IMAGE =
+  "https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80";
+
+// Create custom email template (user-provided URL + subject + body)
+const createCustomEmailTemplate = async (req, res) => {
+  try {
+    const { title, subject, bodyContent, linkUrl } = req.body;
+
+    if (!subject || !bodyContent) {
+      return res.status(400).json({
+        success: false,
+        message: "Subject and body content are required",
+      });
+    }
+
+    const template = new EmailTemplate({
+      title: title || "Custom Email Template",
+      description: "Custom phishing email template created by user",
+      image: DEFAULT_EMAIL_TEMPLATE_IMAGE,
+      category: "Custom",
+      emailTemplate: {
+        subject,
+        bodyContent,
+        linkUrl: linkUrl || "",
+      },
+    });
+
+    await template.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Custom email template created successfully",
+      data: template,
+    });
+  } catch (error) {
+    console.error("Create Custom Email Template Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create custom email template",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getEmailTemplates,
   getEmailTemplate,
   createEmailTemplate,
+  createCustomEmailTemplate,
 };
 

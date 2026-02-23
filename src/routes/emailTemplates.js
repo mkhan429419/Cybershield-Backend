@@ -4,10 +4,14 @@ const {
   getEmailTemplates,
   getEmailTemplate,
   createEmailTemplate,
+  createCustomEmailTemplate,
 } = require("../controllers/emailTemplateController");
 
 // Get all email templates
 router.get("/", getEmailTemplates);
+
+// Create custom email template (user-provided URL + subject + body)
+router.post("/custom", createCustomEmailTemplate);
 
 // Get single email template by ID
 router.get("/:templateId", getEmailTemplate);

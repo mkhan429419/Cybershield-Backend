@@ -37,11 +37,20 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// Root – so visiting the backend URL shows something instead of 404
+app.get("/", (req, res) => {
+  res.json({
+    message: "CyberShield Backend API",
+    health: "/health",
+    docs: "Use /api/* routes (e.g. /api/campaigns, /api/users)",
+  });
+});
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
-    timestamp: new Date().toISOString(), 
+    timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || "development",
   });
 }); 

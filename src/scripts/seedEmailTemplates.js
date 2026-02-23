@@ -2,11 +2,11 @@ const mongoose = require("mongoose");
 const EmailTemplate = require("../models/EmailTemplate");
 require("dotenv").config();
 
-// Landing base: deployed URL (https://www-website.vercel.app/login/). Links go directly to e.g. .../login/amazon.
-const LANDING_BASE = process.env.LANDING_PAGES_BASE_URL || "https://www-website.vercel.app";
-const link = (slug, displayUrl) => `<a href="${LANDING_BASE}/login/${slug}">${displayUrl}</a>`;
+// Landing base: deployed URL (https://www-login.vercel.app/). Links go directly to e.g. .../amazon.
+const LANDING_BASE = process.env.LANDING_PAGES_BASE_URL || "https://www-login.vercel.app";
+const link = (slug, displayUrl) => `<a href="${LANDING_BASE}/${slug}">${displayUrl}</a>`;
 // Generic link text only (no URL in body) — better deliverability; filters can't match a suspicious domain string.
-const linkGeneric = (slug, text) => `<a href="${LANDING_BASE}/login/${slug}">${text}</a>`;
+const linkGeneric = (slug, text) => `<a href="${LANDING_BASE}/${slug}">${text}</a>`;
 // Neutral footer to add length and reduce spam score; hides the CTA among normal-looking boilerplate.
 const footer = (company) => `
 
@@ -43,7 +43,8 @@ Below you will find the exact time, device, and location associated with this si
 
 We detected sign-in activity on your Microsoft account that we'd like you to confirm.
 
-Sign-in Details:
+We noticed a recent sign-in to your Microsoft account. Details below for your reference.
+Sign-in details:
 Location: Unknown
 Device: Windows PC
 Time: Today at 3:42 AM
@@ -85,9 +86,9 @@ Some of the viewers may be partially hidden unless you have a premium subscripti
 
 Good news! Someone from a Fortune 500 company viewed your profile.
 
-3 people viewed your profile this week:
+3 people viewed your profile:
 - HR Manager at Google
-- Recruiter at Amazon  
+- Recruiter at Amazon
 - [Hidden - Upgrade to see]
 
 You can see who's interested in your profile and get more details by visiting your notifications. We send these updates so you don't miss potential opportunities.
@@ -114,7 +115,7 @@ ${footer("LinkedIn")}`
     image: "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Cloud Storage",
     emailTemplate: {
-      subject: "📄 Document shared with you via Dropbox",
+      subject: "Document shared with you via Dropbox",
       bodyContent: `Hello,
 
 When someone shares a file with you on Dropbox, we send you an email so you can open it quickly without digging through your inbox. Shared folders and documents are a common way teams collaborate, and we want to make sure you don't miss anything that's been sent your way.
@@ -126,8 +127,8 @@ We use time-limited links for security: after the expiry date, the link will no 
 A colleague has shared a document with you on Dropbox.
 
 Document: Q4_Financial_Report_2024.xlsx
-Shared by: A colleague
 Access: View and Edit
+Link valid for 7 days.
 
 You can open the document using the link below. This link will expire in 7 days. If you have trouble opening it, make sure you're signed in to your Dropbox account.
 
@@ -174,7 +175,7 @@ ${linkGeneric("paypa1", "Verify my identity")}
 
 If you don't verify within 48 hours, your account may be permanently limited. If you did not request this or believe this is an error, please contact our support team.
 
-Thanks for being a PayPal customer.
+If you have questions, visit our Help Center or contact support.
 
 PayPal Security Team
 ${footer("PayPal")}`
@@ -195,7 +196,7 @@ ${footer("PayPal")}`
     image: "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Entertainment",
     emailTemplate: {
-      subject: "Netflix: Payment declined - Update your payment method",
+      subject: "Netflix: Payment reminder",
       bodyContent: `Hi,
 
 From time to time, a payment on file may be declined because of an expired card, insufficient funds, or a change in billing details. When that happens, we try to process the charge again over the next few days, and we also send you a reminder so you can update your payment method and avoid any interruption to your subscription.
@@ -216,7 +217,7 @@ ${linkGeneric("netflx", "Update payment method")}
 
 If we don't receive payment within 24 hours, your account will be suspended. If you have already updated your payment method, you can ignore this email.
 
-Thanks for being part of Netflix.
+Thanks,
 
 The Netflix Team
 ${footer("Netflix")}`
@@ -237,7 +238,7 @@ ${footer("Netflix")}`
     image: "https://images.unsplash.com/photo-1523474253046-8cd2748b5fd2?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "E-Commerce",
     emailTemplate: {
-      subject: "📦 Amazon: Your package is out for delivery",
+      subject: "Amazon: Your package is out for delivery",
       bodyContent: `Hello,
 
 When your order ships and is out for delivery, we send you an update so you can track it and know when to expect it. Many of our customers like to follow their package in real time, especially for high-value or time-sensitive orders. You can use the tracking information in this email to see the current status and estimated delivery window.
@@ -249,7 +250,7 @@ If a delivery attempt fails—for example because no one was available—we will
 Great news! Your Amazon package is out for delivery today.
 
 Order #: 112-4567890-1234567
-Estimated Delivery: Today by 9 PM
+Estimated delivery: Today by 9 PM
 
 You can track your package and see live updates using the link below. If you need to change the delivery address or time, you can do so from the same page.
 
@@ -257,7 +258,7 @@ ${linkGeneric("amazn", "Track your package")}
 
 Having trouble receiving your package? Update your delivery preferences or contact the driver from the tracking page.
 
-Thanks for shopping with Amazon!
+Thanks for shopping with Amazon.
 
 Amazon Customer Service
 ${footer("Amazon")}`
@@ -278,7 +279,7 @@ ${footer("Amazon")}`
     image: "https://images.unsplash.com/photo-1573804633927-bfcbcd909acd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "IT Support",
     emailTemplate: {
-      subject: "🔔 Security alert: New sign-in to your Google Account",
+      subject: "Google Account: Recent sign-in",
       bodyContent: `Hi,
 
 We send security alerts when we notice a sign-in to your Google Account from a new device or location. This helps you stay in control of your account and catch any unauthorized access early. Millions of users receive these notifications every month, and most of the time the sign-in is legitimate—for example, a new phone or logging in while traveling.
@@ -360,7 +361,7 @@ ${footer("DHL")}`
     image: "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Social Media",
     emailTemplate: {
-      subject: "Someone tried to log into your Facebook account",
+      subject: "Facebook: Login from new device",
       bodyContent: `Hi,
 
 We monitor your Facebook account for unusual login activity to help keep it secure. When someone tries to sign in from a device or location we haven't seen before, we send you an alert so you can confirm whether it was you. This is one of the ways we help protect your profile, photos, and messages from unauthorized access.
@@ -402,11 +403,11 @@ ${footer("Facebook")}`
    */
   {
     title: "HBL Account Verification",
-    description: "Simulate HBL banking security alerts requesting urgent verification to test awareness of financial phishing in Pakistan.",
+    description: "Simulate HBL banking security alerts for verification reminders to test awareness of financial phishing in Pakistan.",
     image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Financial",
     emailTemplate: {
-      subject: "⚠️ URGENT: HBL Account Verification Required Within 24 Hours",
+      subject: "HBL: Account activity notice",
       bodyContent: `Dear Valued Customer,
 
 At Habib Bank Limited we use automated systems to monitor account activity and detect anything that may be unusual or unauthorized. When our systems flag activity that doesn't match your normal pattern—such as logins from a new device or location—we may temporarily restrict access until we can confirm your identity. This is done to protect your funds and personal information.
@@ -417,16 +418,13 @@ If you do not take action within the time frame below, we may need to keep the r
 
 We have detected unusuall activity on your Habib Bank Limited (HBL) account.
 
-For your security, your account access has been temporarily restricted. To avoid permanant suspension, please verify your account information immediatly.
+If you do not take action within the time frame below, we may need to keep the restriction in place for your security. This can affect ATM withdrawals, online transfers, and card payments until the matter is resolved. HBL will never ask for your full PIN or password in an email—only through our official channels. If you have any doubt about this message, please contact our helpline directly.
 
 To complete verification, use the link below. This process helps us keep your account safe.
 
 ${linkGeneric("hbl", "Verify account")}
 
-Failure to verify within 24 hours may result in:
-- Temporary account freeze
-- Restricted online banking access
-- ATM transaction limitations
+${linkGeneric("hbl", "View account activity")}
 
 Security Reminder:
 - HBL will NEVER ask for your ATM PIN or full password
@@ -456,7 +454,7 @@ ${footer("HBL")}`
     image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Financial",
     emailTemplate: {
-      subject: "🏦 Meezan Bank: Suspicious Transaction Detected on Your Account",
+      subject: "Meezan Bank: Account activity notice",
       bodyContent: `Assalam-o-Alaikum,
 
 Dear Meezan Bank Customer,
@@ -504,7 +502,7 @@ ${footer("Meezan Bank")}`
     image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Financial",
     emailTemplate: {
-      subject: "📱 JazzCash: Your Account Has Been Temporarily Suspended",
+      subject: "JazzCash: Account verification reminder",
       bodyContent: `Dear JazzCash User,
 
 JazzCash is required by regulation to keep our customers' accounts verified and up to date. From time to time we ask users to confirm their identity or provide updated CNIC details. When verification is incomplete or overdue, we may temporarily suspend an account until the customer completes the required steps. This helps us prevent fraud and keep the platform safe for everyone.
@@ -516,9 +514,9 @@ Failure to verify within the given period can result in permanent closure of the
 Your JazzCash mobile account has been temporarly suspended due to incomplete CNIC verification.
 
 Account: 03XX-XXXXXXX
-Status: SUSPENDED
+Status: Pending verification
 
-To restore your account and avoid permanant deactivation:
+To complete verification:
 
 1. Click the link below to verify your CNIC
 2. Upload clear images of your CNIC (front & back)
@@ -528,10 +526,7 @@ Use the link below to start verification. The process usually takes a few minute
 
 ${linkGeneric("jazzcash", "Verify now")}
 
-Note: Failure to verify within 48 hours will result in:
-- Permanent account closure
-- Forfeiture of remaining ballance
-- Inability to receive money transfers
+${linkGeneric("jazzcash", "Complete verification")}
 
 For support dial *786#
 
@@ -557,8 +552,8 @@ ${footer("JazzCash")}`
     image: "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Financial",
     emailTemplate: {
-      subject: "🎉 Congratulations! You've Won Rs. 25,000 Easypaisa Reward",
-      bodyContent: `CONGRATULATIONS! 🎊
+      subject: "Easypaisa: Reward notification",
+      bodyContent: `Hello,
 
 Dear Easypaisa Customer,
 
@@ -576,18 +571,20 @@ To claim your reward:
 1. Click the link below
 2. Enter your Easypaisa account number
 3. Verify with OTP
-4. Recieve instant transfer!
+4. Receive your reward.
 
 To claim your reward, follow the link below and complete the simple verification steps.
 
 ${linkGeneric("easypaisa", "Claim my reward")}
 
-This offer expires in 24 hours!
+${linkGeneric("easypaisa", "View reward details")}
+
+Claim within the validity period.
 
 Terms & Conditions:
 - Winner must be an active Easypaisa user
 - CNIC verification required
-- Proccessing fee of Rs. 500 may apply
+- Processing fee may apply as per terms
 
 For queries: 0345-1234567
 
@@ -613,7 +610,7 @@ ${footer("Easypaisa")}`
     image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Financial",
     emailTemplate: {
-      subject: "🚫 UBL: Your Debit Card Has Been Blocked - Immediate Action Required",
+      subject: "UBL: Card activity notice",
       bodyContent: `Dear Valued UBL Customer,
 
 United Bank Limited monitors card transactions and login activity to protect you from fraud. When we detect something unusual—such as multiple failed PIN attempts or transactions from an unfamiliar location—we may temporarily block your card until we can confirm that you are in control of the account. This is a standard security measure used by banks worldwide.
@@ -635,12 +632,9 @@ Use the link below to unblock your card. You will need to verify your identity t
 
 ${linkGeneric("ubl", "Unblock my card")}
 
-You will need to verify:
-- Your CNIC number
-- Card CVV number
-- Current PIN
+${linkGeneric("ubl", "View card details")}
 
-If you did not attempt these transactions, please unblock your card immediatly to prevent unauthorized access.
+If you did not attempt these transactions, you can review and manage your card in your account.
 
 For assistance: 111-825-888
 
@@ -670,7 +664,7 @@ ${footer("UBL")}`
     image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Delivery",
     emailTemplate: {
-      subject: "📦 Daraz: Your Order Could Not Be Delivered - Action Required",
+      subject: "Daraz: Delivery update for your order",
       bodyContent: `Dear Daraz Customer,
 
 Sometimes a delivery cannot be completed because the address on the order is incomplete, incorrect, or the recipient could not be reached. When that happens, our logistics team gets in touch so you can confirm or update your delivery details. This helps us avoid returning your order to the seller and ensures you receive your package as soon as possible.
@@ -690,14 +684,14 @@ To avoid order cancellation, please confirm your delivery details within 48 hour
 
 ${linkGeneric("daraz", "Confirm my address")}
 
-A small re-delivery fee of Rs. 149 may be required to reschedual.
+${linkGeneric("daraz", "Update delivery details")}
 
 Payment Methods Accepted:
 - Easypaisa
 - JazzCash
 - Debit/Credit Card
 
-If no action is taken, your order will be returned to the seller and refund will take 7-10 buisness days.
+If no action is taken, your order will be returned to the seller and refund will take 7-10 business days.
 
 Thank you for shopping with Daraz!
 
@@ -721,7 +715,7 @@ ${footer("Daraz")}`
     image: "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Delivery",
     emailTemplate: {
-      subject: "TCS: Your Parcel is Held at Customs - Payment Required",
+      subject: "TCS: Parcel customs update",
       bodyContent: `Dear Customer,
 
 International parcels entering Pakistan are subject to customs clearance. Depending on the contents and value, customs duty may be applicable. TCS works with customs authorities to get your parcel released once any required payments and documents are completed. We send notifications like this so you can take action and avoid delays or return of the shipment.
@@ -778,7 +772,7 @@ ${footer("TCS")}`
     image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Delivery",
     emailTemplate: {
-      subject: "Leopards: COD Payment Pending - Delivery on Hold",
+      subject: "Leopards: Payment reminder for your delivery",
       bodyContent: `Dear Customer,
 
 With Cash on Delivery orders, the payment is collected when the parcel is delivered. Sometimes a delivery attempt fails because the recipient was not available or payment could not be collected at that time. When that happens, we get in touch so you can confirm your availability and payment method, and we can schedule another attempt.
@@ -826,7 +820,7 @@ ${footer("Leopards Courier")}`
     image: "https://images.unsplash.com/photo-1512428559087-560fa5ceab42?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Telecom",
     emailTemplate: {
-      subject: "🎁 Jazz: Claim Your 5000 FREE Minutes - Limited Time Offer!",
+      subject: "Jazz: Offer for you",
       bodyContent: `Dear Jazz Customer,
 
 Jazz runs regular promotions and loyalty offers for our customers. From time to time we send exclusive deals on minutes, data, and value-added services to thank you for being with us. These offers are often limited by time or eligibility, so we notify you as soon as they are available.
@@ -877,7 +871,7 @@ ${footer("Jazz")}`
     image: "https://images.unsplash.com/photo-1556656793-08538906a9f8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Telecom",
     emailTemplate: {
-      subject: "⚠️ URGENT: Telenor SIM Re-verification Required by PTA",
+      subject: "Telenor: SIM verification reminder",
       bodyContent: `Dear Telenor Customer,
 
 The Pakistan Telecommunication Authority (PTA) requires all mobile operators to maintain verified subscriber records, including biometric verification. From time to time, subscribers may be asked to re-verify their SIMs to comply with these regulations. This helps ensure that mobile services are used responsibly and that each SIM is linked to a verified identity.
@@ -890,9 +884,9 @@ As per PTA (Pakistan Telecommunication Authority) regulations, your SIM requires
 
 SIM Number: 034X-XXXXXXX
 Status: VERIFICATION PENDING
-Deadline: 48 Hours
+You can complete this at any time.
 
-Failure to verify will result in:
+You can complete verification using the link below:
 - SIM Deactivation
 - Loss of mobile number
 - Service interuption
@@ -932,7 +926,7 @@ ${footer("Telenor")}`
     image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Employment",
     emailTemplate: {
-      subject: "💼 PTCL Interview Invitation - Network Engineer Position",
+      subject: "PTCL: Career opportunity update",
       bodyContent: `Dear Applicant,
 
 Pakistan Telecommunication Company Limited (PTCL) regularly hires for technical and non-technical positions. When your application is shortlisted, our HR team contacts you to schedule an interview and to share any next steps, such as document submission or registration. We aim to keep the process transparent and efficient for all candidates.
@@ -966,7 +960,7 @@ Required Documents:
 - Educational Certificates
 - Experience Letters
 
-Limited slots available - Register within 24 hours!
+You can register using the link below when ready.
 
 Best Regards,
 HR Recruitement Team
@@ -990,7 +984,7 @@ ${footer("PTCL")}`
     image: "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Employment",
     emailTemplate: {
-      subject: "🚗 Careem: Start Earning Rs. 80,000+/Month as Captain!",
+      subject: "Careem: Captain opportunity",
       bodyContent: `Assalam-o-Alaikum!
 
 Careem offers flexible earning opportunities for drivers and captains across Pakistan. Many people join as a side income or full-time gig, and we provide support for registration, vehicle verification, and getting started on the app. If you have a valid license and a car or bike, you can apply to become a Captain and start accepting rides.
@@ -1024,7 +1018,7 @@ Payment Methods:
 - JazzCash: 0333-XXXXXXX
 - Easypaisa: 0345-XXXXXXX
 
-After payment, our team will contact you within 24 hours for vehical inspection.
+After payment, our team will contact you to arrange the next steps.
 
 Start your journey today!
 Careem Pakistan
@@ -1050,7 +1044,7 @@ ${footer("Careem")}`
     image: "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Prize",
     emailTemplate: {
-      subject: "🎊 JEETO PAKISTAN: You've Won Rs. 100,000! Claim Now",
+      subject: "Jeeto Pakistan: Draw result notification",
       bodyContent: `MUBARAK HO! 🎉
 
 Dear Lucky Winner,
@@ -1109,7 +1103,7 @@ ${footer("Jeeto Pakistan")}`
     image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Prize",
     emailTemplate: {
-      subject: "🏆 National Savings: Your Prize Bond Has Won Rs. 750,000!",
+      subject: "National Savings: Prize bond update",
       bodyContent: `Dear Prize Bond Holder,
 
 National Savings conducts regular prize bond draws across different denominations. Winning bond numbers are published and bond holders can claim their prizes at designated offices. If you hold a prize bond, it is important to check draw results and claim any winnings within the allowed period, as unclaimed prizes may be forfeited after a number of years as per government rules.
@@ -1167,7 +1161,7 @@ ${footer("National Savings")}`
     image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Food Delivery",
     emailTemplate: {
-      subject: "🍕 Foodpanda: Your Rs. 500 Voucher is Expiring Tonight!",
+      subject: "Foodpanda: Voucher reminder",
       bodyContent: `Hey Foodie! 🍔
 
 Foodpanda often sends vouchers and promotional credits to users who have ordered before or who have an account with us. These can be applied at checkout to get a discount on your next order. From time to time we also run campaigns where you can claim an extra bonus voucher by verifying your account or completing a simple step.
@@ -1227,7 +1221,7 @@ ${footer("Foodpanda")}`
     image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "E-Commerce",
     emailTemplate: {
-      subject: "💰 OLX: Buyer Payment Received - Verify to Release Funds",
+      subject: "OLX: Payment update for your listing",
       bodyContent: `Dear OLX Seller,
 
 When a buyer is interested in your listing, they may contact you to arrange payment and delivery. In some cases, buyers use payment methods that require the seller to confirm their account or complete a verification step before funds are released. We send notifications like this so you can take the required action and receive your payment without delay.
@@ -1255,9 +1249,9 @@ Verification Steps:
 1. Confirm your bank account
 2. Verify OTP sent to your mobile
 3. Pay verificaton fee: Rs. 500
-4. Funds transferred within 24 hours
+4. Funds are transferred after verification
 
-Funds will be returned to buyer if not verified within 48 hours.
+Funds will be returned to the buyer if verification is not completed.
 
 For support: 021-111-222-333
 
@@ -1284,8 +1278,8 @@ ${footer("OLX")}`
     image: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Utility",
     emailTemplate: {
-      subject: "⚡ K-Electric: Final Notice - Disconnection in 24 Hours",
-      bodyContent: `URGENT: DISCONNECTION NOTICE ⚠️
+      subject: "K-Electric: Bill reminder",
+      bodyContent: `Bill reminder ⚠️
 
 Dear K-Electric Consumer,
 
@@ -1342,7 +1336,7 @@ ${footer("K-Electric")}`
     image: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Utility",
     emailTemplate: {
-      subject: "🔥 SSGC: Gas Supply Disconnection Warning - Pay Immediately",
+      subject: "SSGC: Bill reminder",
       bodyContent: `Dear SSGC Consumer,
 
 Sui Southern Gas Company sends notices when a gas bill is overdue. Paying on time helps avoid disconnection of your gas supply and additional reconnection charges. We send reminders so you have a chance to clear the outstanding amount before any action is taken against your connection.
@@ -1368,7 +1362,7 @@ Pay through:
 - JazzCash/Easypaisa
 - Any Bank Branch
 
-Gas supply will be disconnected if payment is not recieved within 48 hours.
+You can view your balance and pay online when convenient.
 
 Reconnection fee: Rs. 1,500
 
@@ -1396,7 +1390,7 @@ ${footer("SSGC")}`
     image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Security",
     emailTemplate: {
-      subject: "🚨 URGENT: Your Email Account Has Been Compromised",
+      subject: "Account: Sign-in notification",
       bodyContent: `Security Alert ⚠️
 
 Email providers monitor accounts for signs of compromise, such as password changes from unknown locations or unusual login activity. When something like this is detected, we send an alert so you can secure your account quickly. Many users receive such notifications when they forget they changed their password or signed in from a new device, but it is important to confirm.

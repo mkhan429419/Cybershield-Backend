@@ -29,6 +29,10 @@ const emailTemplateSchema = new mongoose.Schema(
         type: String,
         required: true,
       },
+      linkUrl: {
+        type: String,
+        default: "",
+      },
     },
     isActive: {
       type: Boolean,

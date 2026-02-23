@@ -100,9 +100,51 @@ const createWhatsAppTemplate = async (req, res) => {
   }
 };
 
+const DEFAULT_WHATSAPP_TEMPLATE_IMAGE =
+  "https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80";
+
+// Create custom WhatsApp template (user-provided URL + message body)
+const createCustomWhatsAppTemplate = async (req, res) => {
+  try {
+    const { title, messageTemplate, landingPageUrl } = req.body;
+
+    if (!messageTemplate) {
+      return res.status(400).json({
+        success: false,
+        message: "Message body is required",
+      });
+    }
+
+    const template = new WhatsAppTemplate({
+      title: title || "Custom WhatsApp Template",
+      description: "Custom phishing message template created by user",
+      image: DEFAULT_WHATSAPP_TEMPLATE_IMAGE,
+      category: "Custom",
+      messageTemplate,
+      landingPageUrl: landingPageUrl || "",
+    });
+
+    await template.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Custom WhatsApp template created successfully",
+      data: template,
+    });
+  } catch (error) {
+    console.error("Create Custom WhatsApp Template Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create custom WhatsApp template",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getWhatsAppTemplates,
   getWhatsAppTemplate,
   createWhatsAppTemplate,
+  createCustomWhatsAppTemplate,
 };
 

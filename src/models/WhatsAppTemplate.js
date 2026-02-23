@@ -24,6 +24,10 @@ const whatsAppTemplateSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    landingPageUrl: {
+      type: String,
+      default: "",
+    },
     isActive: {
       type: Boolean,
       default: true,
