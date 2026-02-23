@@ -17,6 +17,7 @@ const campaignRoutes = require("./routes/campaigns");
 const incidentRoutes = require("./routes/incidents");
 const chatRoutes = require("./routes/chat");
 const courseRoutes = require("./routes/courses");
+const certificateRoutes = require("./routes/certificates");
 const uploadRoutes = require("./routes/upload");
 
 const app = express();
@@ -59,6 +60,7 @@ app.use("/api/campaigns", campaignRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/courses", courseRoutes);
+app.use("/api/certificates", certificateRoutes);
 app.use("/api/upload", uploadRoutes);
 
 // 404 handler

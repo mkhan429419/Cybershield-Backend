@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const Course = require("../models/Course");
 const CourseProgress = require("../models/CourseProgress");
 const User = require("../models/User");
+const { isCourseCompleted, generateCertificateNumber } = require("./certificateController");
+const Certificate = require("../models/Certificate");
 
 /**
  * GET /api/courses
@@ -339,7 +341,45 @@ async function markComplete(req, res) {
       { $addToSet: { completed: id } },
       { new: true, upsert: true }
     ).lean();
-    return res.status(200).json({ success: true, completed: progress.completed });
+    
+    // Check if course is now completed and generate certificate if needed
+    const completed = await isCourseCompleted(userId, courseId);
+    let certificateGenerated = false;
+    if (completed) {
+      // Check if certificate already exists
+      const existingCert = await Certificate.findOne({ user: userId, course: courseId }).lean();
+      if (!existingCert) {
+        // Auto-generate certificate
+        try {
+          const course = await Course.findById(courseId).lean();
+          const user = await User.findById(userId).select("displayName email").lean();
+          if (course && user) {
+            const certificate = new Certificate({
+              user: userId,
+              course: courseId,
+              userName: user.displayName || "User",
+              userEmail: user.email,
+              courseTitle: course.courseTitle,
+              courseDescription: course.description || "",
+              certificateNumber: generateCertificateNumber(),
+              issuedDate: new Date(),
+              completionDate: new Date(),
+            });
+            await certificate.save();
+            certificateGenerated = true;
+          }
+        } catch (certError) {
+          console.error("Error auto-generating certificate:", certError);
+          // Don't fail the request if certificate generation fails
+        }
+      }
+    }
+    
+    return res.status(200).json({ 
+      success: true, 
+      completed: progress.completed,
+      certificateGenerated 
+    });
   } catch (error) {
     console.error("markComplete error:", error);
     return res.status(500).json({ success: false, error: "Failed to update progress" });
