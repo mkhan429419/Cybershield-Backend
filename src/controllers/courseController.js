@@ -130,8 +130,18 @@ async function createCourse(req, res) {
                   title: (s.title || "").trim(),
                   material: (s.material || "").trim(),
                   urls: Array.isArray(s.urls) ? s.urls.map((u) => String(u).trim()).filter(Boolean) : [],
+                  media: Array.isArray(s.media)
+                    ? s.media
+                        .map((m) => ({
+                          type: m.type === 'video' ? 'video' : 'image',
+                          url: String(m.url || "").trim(),
+                          alt: String(m.alt || "").trim(),
+                          caption: String(m.caption || "").trim(),
+                        }))
+                        .filter((m) => m.url)
+                    : [],
                 }))
-                .filter((s) => s.title || s.material || s.urls.length > 0)
+                .filter((s) => s.title || s.material || s.urls.length > 0 || s.media.length > 0)
             : [],
           quiz: Array.isArray(m.quiz)
             ? m.quiz
@@ -220,8 +230,18 @@ async function updateCourse(req, res) {
                 title: (s.title || "").trim(),
                 material: (s.material || "").trim(),
                 urls: Array.isArray(s.urls) ? s.urls.map((u) => String(u).trim()).filter(Boolean) : [],
+                media: Array.isArray(s.media)
+                  ? s.media
+                      .map((m) => ({
+                        type: m.type === 'video' ? 'video' : 'image',
+                        url: String(m.url || "").trim(),
+                        alt: String(m.alt || "").trim(),
+                        caption: String(m.caption || "").trim(),
+                      }))
+                      .filter((m) => m.url)
+                  : [],
               }))
-              .filter((s) => s.title || s.material || (s.urls && s.urls.length > 0))
+              .filter((s) => s.title || s.material || (s.urls && s.urls.length > 0) || (s.media && s.media.length > 0))
           : [],
         quiz: Array.isArray(m.quiz)
           ? m.quiz
@@ -326,6 +346,34 @@ async function markComplete(req, res) {
   }
 }
 
+/**
+ * DELETE /api/courses/:courseId/progress
+ * Unmark a submodule as complete. Body: { submoduleId } (e.g. "0-0", "0-quiz").
+ */
+async function unmarkComplete(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const { courseId } = req.params;
+    const { submoduleId } = req.body || {};
+    if (!submoduleId || typeof submoduleId !== "string" || !submoduleId.trim()) {
+      return res.status(400).json({ success: false, error: "submoduleId is required" });
+    }
+    const id = submoduleId.trim();
+    const progress = await CourseProgress.findOneAndUpdate(
+      { user: userId, course: courseId },
+      { $pull: { completed: id } },
+      { new: true, upsert: true }
+    ).lean();
+    return res.status(200).json({ success: true, completed: progress.completed });
+  } catch (error) {
+    console.error("unmarkComplete error:", error);
+    return res.status(500).json({ success: false, error: "Failed to update progress" });
+  }
+}
+
 module.exports = {
   getCourses,
   getCourseById,
@@ -334,4 +382,5 @@ module.exports = {
   deleteCourse,
   getProgress,
   markComplete,
+  unmarkComplete,
 };

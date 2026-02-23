@@ -17,6 +17,7 @@ const campaignRoutes = require("./routes/campaigns");
 const incidentRoutes = require("./routes/incidents");
 const chatRoutes = require("./routes/chat");
 const courseRoutes = require("./routes/courses");
+const uploadRoutes = require("./routes/upload");
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use("/api/campaigns", campaignRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/courses", courseRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -70,7 +72,7 @@ app.use((error, req, res, next) => {
 
   // Multer errors
   if (error.code === "LIMIT_FILE_SIZE") {
-    return res.status(400).json({ error: "File too large" });
+    return res.status(400).json({ error: "File too large. Maximum size is 100MB." });
   }
 
   if (error.message === "Only CSV files are allowed") {

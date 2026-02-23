@@ -1,10 +1,21 @@
 const mongoose = require("mongoose");
 
+const mediaItemSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ['image', 'video'], required: true },
+    url: { type: String, required: true },
+    alt: { type: String, default: "" },
+    caption: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const moduleSectionSchema = new mongoose.Schema(
   {
     title: { type: String, default: "" },
     material: { type: String, default: "" },
     urls: [{ type: String }],
+    media: [mediaItemSchema],
   },
   { _id: true }
 );
