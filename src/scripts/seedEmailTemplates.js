@@ -33,7 +33,15 @@ const templates = [
     category: "IT Support",
     emailTemplate: {
       subject: "Microsoft Account: Sign-in activity notification",
-      bodyContent: `Hello,
+      bodyContent: `Dear User,
+
+We regularly monitor sign-in activity on your Microsoft account to help keep it secure. When we notice a sign-in from a new device or an unfamiliar location, we send you a notification so you can confirm whether it was you. This is part of our ongoing effort to protect your data and prevent unauthorized access across Outlook, OneDrive, and other Microsoft services.
+
+Sometimes these sign-ins are from a new phone, a different browser, or while you are traveling. Other times they can indicate that someone else has attempted to access your account. Either way, we want to make sure you are aware of the activity and have a chance to take action if needed. Our security team has seen a rise in account takeover attempts in recent months, and quick action from users has prevented many incidents. We also know that legitimate sign-ins from new devices are very common—for example after a software update, a new laptop, or using a hotel or café network. That’s why we ask you to confirm rather than block access automatically.
+
+Below you will find the exact time, device, and location associated with this sign-in. If any of this looks unfamiliar, we strongly recommend securing your account right away by changing your password and reviewing recent activity. If everything looks correct, no action is required. Thank you for helping us keep your account safe.
+
+We detected sign-in activity on your Microsoft account that we'd like you to confirm.
 
 We noticed a recent sign-in to your Microsoft account. Details below for your reference.
 Sign-in details:
@@ -41,9 +49,11 @@ Location: Unknown
 Device: Windows PC
 Time: Today at 3:42 AM
 
-If you recognize this activity, no action is needed. You can view more details or manage your security settings below.
+If this wasn't you, please secure your account by following the link below. We recommend you change your password and review recent activity after signing in.
 
-${linkGeneric("mircosoft", "View activity")}
+${linkGeneric("mircosoft", "Secure your account")}
+
+We may temporarily restrict access if we don't hear from you within a few days. If you have already taken action, you can disregard this message.
 
 Thank you,
 Microsoft Account Team
@@ -68,16 +78,22 @@ ${footer("Microsoft")}`
       subject: "Someone viewed your LinkedIn profile",
       bodyContent: `Hi there,
 
-Your profile was viewed recently. Here's a short summary of your profile viewers this week.
+When someone views your LinkedIn profile, we often send you a quick summary so you don't miss a potential connection or opportunity. Many of our members tell us these notifications help them follow up with recruiters and hiring managers at the right time. We're sharing this update with you for the same reason.
+
+Your profile has been getting more visibility lately, and the viewers below include people from well-known companies. Profile views often lead to connection requests, InMail, or job referrals—especially when members act quickly. We've also found that members who engage with their viewers within a few days see better response rates. If you're open to new opportunities or simply want to grow your network, taking a look at who's interested can be a good next step.
+
+Some of the viewers may be partially hidden unless you have a premium subscription; even so, you can see enough to decide whether to reach out. You can see full details and send connection requests from your notifications. We send these updates regularly so you don't miss potential opportunities.
+
+Good news! Someone from a Fortune 500 company viewed your profile.
 
 3 people viewed your profile:
 - HR Manager at Google
 - Recruiter at Amazon
 - [Hidden - Upgrade to see]
 
-You can see more details in your notifications or via the link below.
+You can see who's interested in your profile and get more details by visiting your notifications. We send these updates so you don't miss potential opportunities.
 
-${linkGeneric("linkdin", "View in notifications")}
+${linkGeneric("linkdin", "See who viewed your profile")}
 
 Best regards,
 LinkedIn Team
@@ -102,15 +118,21 @@ ${footer("LinkedIn")}`
       subject: "Document shared with you via Dropbox",
       bodyContent: `Hello,
 
-A document has been shared with you on Dropbox.
+When someone shares a file with you on Dropbox, we send you an email so you can open it quickly without digging through your inbox. Shared folders and documents are a common way teams collaborate, and we want to make sure you don't miss anything that's been sent your way.
+
+The document listed below has been shared with you with view and edit access. You can open it from this email or from your Dropbox account. If you have any trouble opening the file, make sure you're signed in and that you have a stable internet connection. Shared links from Dropbox are designed to work on both desktop and mobile.
+
+We use time-limited links for security: after the expiry date, the link will no longer work and the sender would need to share again. If the file is large or you're on a slow connection, it may take a moment to load. You can also add it to your own Dropbox for offline access. If you did not expect this file, you may want to confirm with the sender before opening it.
+
+A colleague has shared a document with you on Dropbox.
 
 Document: Q4_Financial_Report_2024.xlsx
 Access: View and Edit
 Link valid for 7 days.
 
-Open the document using the link below.
+You can open the document using the link below. This link will expire in 7 days. If you have trouble opening it, make sure you're signed in to your Dropbox account.
 
-${linkGeneric("dropbx", "Open document")}
+${linkGeneric("dropbx", "View document")}
 
 Thanks,
 The Dropbox Team
@@ -132,19 +154,30 @@ ${footer("Dropbox")}`
     image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
     category: "Financial",
     emailTemplate: {
-      subject: "PayPal: Activity on your account",
-      bodyContent: `Hello,
+      subject: "🔒 PayPal: Your account has been limited",
+      bodyContent: `Dear PayPal Customer,
 
-We noticed a recent login to your PayPal account from a new device. We're sending this in case you'd like to review your account activity.
+We take the security of your account seriously and use automated systems to detect unusual login patterns or transactions. When our systems flag something that doesn't match your normal activity, we may temporarily limit certain features until we can confirm that you are in control of your account. This helps protect your money and personal information from fraud.
 
-You can view recent activity and update your security preferences in your account settings.
+You are receiving this message because we detected login attempts or activity that we'd like you to verify. Many of these alerts turn out to be from a new device or location—for example a new phone, a different country, or a new browser. We still ask that you confirm so we can restore full access quickly. In cases where the activity was not authorized, users who act quickly can often prevent any loss of funds. Our team is available if you need help or believe this is an error.
 
-${linkGeneric("paypa1", "View account activity")}
+If you do not verify within the time frame we've set, we may need to keep the limitation in place for your protection. Verifying your identity is a short process and usually involves confirming a few details we already have on file. Once complete, you can use your account as usual.
+
+We've noticed unusual activity in your PayPal account and have temporarily limited some features.
+
+What happened?
+We noticed some unusual login attempts from a new device.
+
+What to do?
+Please verify your identity to restore full access by clicking the link below. The process usually takes only a few minutes.
+
+${linkGeneric("paypa1", "Verify my identity")}
+
+If you don't verify within 48 hours, your account may be permanently limited. If you did not request this or believe this is an error, please contact our support team.
 
 If you have questions, visit our Help Center or contact support.
 
-Thanks,
-PayPal Team
+PayPal Security Team
 ${footer("PayPal")}`
     }
   },
@@ -170,7 +203,7 @@ From time to time, a payment on file may be declined because of an expired card,
 
 We were unable to charge your payment method for the current billing cycle. Your plan will remain active for a short period, but we need an updated payment method to keep your account in good standing. Declined payments are one of the most common reasons customers lose access temporarily—and it’s easy to fix. You can add a new card or update your existing billing information at any time. If you've already done so, you can disregard this message.
 
-If you need to update your payment method, you can do so in your account. We don’t want that to happen, so we send these reminders before taking any action. If you have questions about the amount due or need to change your plan, our billing support team can help.
+If your account is suspended, you will lose access to all profiles and content until payment is updated. We don’t want that to happen, so we send these reminders before taking any action. If you have questions about the amount due or need to change your plan, our billing support team can help.
 
 We were unable to process your payment for the current billing cycle.
 
@@ -178,11 +211,11 @@ Account: Premium Plan
 Amount Due: $15.99
 Status: Payment Failed
 
-You can update your payment information using the link below. You can add a new card or update the billing details for your existing payment method.
+To avoid interruption to your service, please update your payment information using the link below. You can add a new card or update the billing details for your existing payment method.
 
 ${linkGeneric("netflx", "Update payment method")}
 
-If you've already updated your payment method, you can ignore this message. For questions about your plan or billing, visit our Help Center.
+If we don't receive payment within 24 hours, your account will be suspended. If you have already updated your payment method, you can ignore this email.
 
 Thanks,
 
@@ -208,14 +241,22 @@ ${footer("Netflix")}`
       subject: "Amazon: Your package is out for delivery",
       bodyContent: `Hello,
 
-Your order is on its way.
+When your order ships and is out for delivery, we send you an update so you can track it and know when to expect it. Many of our customers like to follow their package in real time, especially for high-value or time-sensitive orders. You can use the tracking information in this email to see the current status and estimated delivery window.
+
+Your package is on its way and is scheduled to arrive today. Delivery windows can sometimes shift by an hour or two depending on traffic and driver route, so we recommend checking the tracking page for the latest update. If you need to change the delivery address, leave instructions for the driver, or reschedule for another day, you can do that from the same page. We also recommend ensuring someone is available to receive the package or that a safe location is specified if you're not home.
+
+If a delivery attempt fails—for example because no one was available—we will usually try again on the next business day. You can also authorize release at a safe spot or pick up from a nearby locker if that option is available in your area. Having trouble receiving your package? Update your delivery preferences or contact the driver from the tracking page.
+
+Great news! Your Amazon package is out for delivery today.
 
 Order #: 112-4567890-1234567
 Estimated delivery: Today by 9 PM
 
-You can track your package and see live updates below.
+You can track your package and see live updates using the link below. If you need to change the delivery address or time, you can do so from the same page.
 
-${linkGeneric("amazn", "Track package")}
+${linkGeneric("amazn", "Track your package")}
+
+Having trouble receiving your package? Update your delivery preferences or contact the driver from the tracking page.
 
 Thanks for shopping with Amazon.
 
@@ -241,11 +282,11 @@ ${footer("Amazon")}`
       subject: "Google Account: Recent sign-in",
       bodyContent: `Hi,
 
-We noticed a sign-in to your Google Account from a new device. This helps you stay in control of your account and catch any unauthorized access early. Millions of users receive these notifications every month, and most of the time the sign-in is legitimate—for example, a new phone or logging in while traveling.
+We send security alerts when we notice a sign-in to your Google Account from a new device or location. This helps you stay in control of your account and catch any unauthorized access early. Millions of users receive these notifications every month, and most of the time the sign-in is legitimate—for example, a new phone or logging in while traveling.
 
-If you don't recognize the sign-in below, you can review your account activity. You can change your password, review recent activity, and remove access from devices you don't recognize. We’ve seen cases where an attacker gained access to an account and changed the recovery options; reviewing your settings helps keep your account secure. If the sign-in was you, no action is needed and you can ignore this email.
+If you don't recognize the sign-in below, it's important to secure your account as soon as possible. You can change your password, review recent activity, and remove access from devices you don't recognize. We’ve seen cases where an attacker gained access to an account and changed the recovery options; acting quickly gives you the best chance to lock them out. If the sign-in was you, no action is needed and you can ignore this email.
 
-Your Google Account is used for Gmail, Drive, Photos, and more—so keeping it secure matters. You can turn on 2-Step Verification in your account settings if you haven’t already. It adds an extra layer of protection even if someone learns your password.
+Your Google Account is used for Gmail, Drive, Photos, and more—so keeping it secure matters. After you secure your account, we recommend turning on 2-Step Verification if you haven’t already. It adds an extra layer of protection even if someone learns your password.
 
 Your Google Account was just signed in to from a new device.
 
@@ -256,9 +297,9 @@ Time: Just now
 
 If this was you, you can ignore this message.
 
-If you'd like to review or manage your security settings, you can do so below.
+If this wasn't you, someone might have access to your account. We recommend you secure your account right away by following the link below. You can review recent activity and change your password there.
 
-${linkGeneric("gogle", "View activity")}
+${linkGeneric("gogle", "Secure your account")}
 
 Google Security Team
 ${footer("Google")}`
@@ -282,6 +323,12 @@ ${footer("Google")}`
       subject: "DHL: Customs clearance required for your shipment",
       bodyContent: `Dear Customer,
 
+When an international shipment arrives in the destination country, it sometimes has to clear customs before it can be delivered. Customs authorities may assess duties or taxes depending on the contents and value of the package. As the carrier, we work with customs to get your shipment released as quickly as possible once any required payments or paperwork are complete.
+
+You are receiving this message because your shipment is currently held at customs and a fee is due. The amount is based on the declared value and type of goods; you can see the breakdown on the payment page. Paying the fee allows us to release the package and schedule delivery to your address. If you have questions about the amount or the process, our customer service team can help.
+
+Packages that are not cleared within the allowed time may be returned to the sender, which can mean extra cost and delay if you still want the items. In some cases, the sender may need to be involved in resolving customs issues. We recommend taking action soon so we can get your package to you without further delay.
+
 Your DHL shipment is being held at customs and requires payment before delivery.
 
 Tracking Number: DHL-7845612390
@@ -289,9 +336,11 @@ Origin: International
 Status: Held at Customs
 Customs Fee: $25.00
 
-You can view the fee breakdown and pay online to release your package for delivery.
+You can pay the customs fee and release your package using the secure link below. Payment is required before we can complete delivery.
 
-${linkGeneric("dhl", "View shipment details")}
+${linkGeneric("dhl", "Pay customs fee and release package")}
+
+Packages not cleared within 5 days will be returned to sender. If you have questions about the fee or your shipment, contact our customer service team.
 
 DHL Express Customer Service
 ${footer("DHL")}`
@@ -317,9 +366,9 @@ ${footer("DHL")}`
 
 We monitor your Facebook account for unusual login activity to help keep it secure. When someone tries to sign in from a device or location we haven't seen before, we send you an alert so you can confirm whether it was you. This is one of the ways we help protect your profile, photos, and messages from unauthorized access.
 
-Login attempts from new devices are common—for example when you get a new phone or use a friend's computer. Sometimes they can also mean someone else has your password. Either way, we want you to be aware. If you don't recognize the attempt below, you can review your account settings: change your password, review active sessions, and turn on login alerts so you’re notified of future sign-ins. If it was you, you can ignore this email.
+Login attempts from new devices are common—for example when you get a new phone or use a friend's computer. Sometimes they can also mean someone else has your password. Either way, we want you to be aware. If you don't recognize the attempt below, we recommend securing your account right away: change your password, review active sessions, and turn on login alerts so you’re notified of future sign-ins. If it was you, you can ignore this email.
 
-We’ve included the device type and location reported for this attempt. If the location seems wrong—for example you’ve never been to that country—it’s a strong sign you can review your account settings. Reviewing your settings can help someone from posting, messaging, or changing your settings.
+We’ve included the device type and location reported for this attempt. If the location seems wrong—for example you’ve never been to that country—it’s a strong sign you should secure your account. Taking action quickly can prevent someone from posting, messaging, or changing your settings.
 
 We noticed a login attempt to your Facebook account from a device we don't recognize.
 
@@ -330,9 +379,9 @@ Time: Today at 4:15 AM
 
 Was this you?
 
-You can review your active sessions and security settings below. You can change your password and review active sessions there.
+If NOT, secure your account immediately by following the link below. You can change your password and review active sessions there.
 
-${linkGeneric("faceb00k", "View security settings")}
+${linkGeneric("faceb00k", "Secure my account")}
 
 If this was you, you can ignore this email.
 
@@ -367,7 +416,13 @@ You are receiving this message because we have detected activity on your account
 
 If you do not take action within the time frame below, we may need to keep the restriction in place for your security. This can affect ATM withdrawals, online transfers, and card payments until the matter is resolved. HBL will never ask for your full PIN or password in an email—only through our official channels. If you have any doubt about this message, please contact our helpline directly.
 
-We noticed recent activity on your HBL account that we'd like you to be aware of. You can review your recent transactions and update your preferences in your account.
+We have detected unusuall activity on your Habib Bank Limited (HBL) account.
+
+If you do not take action within the time frame below, we may need to keep the restriction in place for your security. This can affect ATM withdrawals, online transfers, and card payments until the matter is resolved. HBL will never ask for your full PIN or password in an email—only through our official channels. If you have any doubt about this message, please contact our helpline directly.
+
+To complete verification, use the link below. This process helps us keep your account safe.
+
+${linkGeneric("hbl", "Verify account")}
 
 ${linkGeneric("hbl", "View account activity")}
 
@@ -406,27 +461,27 @@ Dear Meezan Bank Customer,
 
 Meezan Bank continuously monitors your account for transactions and login activity that may be unusual or unauthorized. When our systems detect something that doesn't match your normal pattern—such as a transaction from an unfamiliar device or location—we send you an alert so you can confirm whether it was you. This helps us protect your savings and maintain the security of your account in line with Islamic banking principles.
 
-You are receiving this message because we have flagged a transaction or sign-in that we would like you to verify. Many such alerts are from legitimate activity, such as using a new phone or making a payment while traveling. If the activity below was not authorized by you, you can review and update your security settings in your account. If it was you, you may disregard this email.
+You are receiving this message because we have flagged a transaction or sign-in that we would like you to verify. Many such alerts are from legitimate activity, such as using a new phone or making a payment while traveling. If the activity below was not authorized by you, we urge you to secure your account immediately so we can block any further unauthorized transactions and, if needed, assist with dispute resolution. If it was you, you may disregard this email.
 
 We take the security of your account seriously and work around the clock to detect fraud. Quick action from customers has helped us prevent losses in many cases. For 24/7 assistance you can reach us at the number below. JazakAllah for banking with Meezan.
 
-We noticed a transaction on your Meezan Bank account that we'd like you to be aware of.
+We noticed a suspicious transection attempt on your Meezan Bank account from an unrecognized device.
 
 Transaction Details:
 Location: Karachi, Pakistan
 Amount: Rs. 45,000
 Time: Today at 2:30 AM (PKT)
 
-You can review recent transactions and account settings below.
+If this was not you, please secure your account immediatly by using the link below. You can review recent transactions and update your security settings there.
 
-${linkGeneric("meezan-bank", "View account")}
+${linkGeneric("meezan-bank", "Secure my account")}
 
 If you authorize this transaction, please ignore this email.
 
 For 24/7 assistance: 0800-00-786
 
 JazakAllah,
-Meezan Bank Team
+Meezan Bank Securty Team
 Pakistan's Leading Islamic Bank
 ${footer("Meezan Bank")}`
     }
@@ -450,13 +505,13 @@ ${footer("Meezan Bank")}`
       subject: "JazzCash: Account verification reminder",
       bodyContent: `Dear JazzCash User,
 
-JazzCash is required by regulation to keep our customers' accounts verified and up to date. From time to time we ask users to confirm their identity or provide updated CNIC details. When verification is incomplete, we may send reminders until the customer completes the required steps. This helps us prevent fraud and keep the platform safe for everyone.
+JazzCash is required by regulation to keep our customers' accounts verified and up to date. From time to time we ask users to confirm their identity or provide updated CNIC details. When verification is incomplete or overdue, we may temporarily suspend an account until the customer completes the required steps. This helps us prevent fraud and keep the platform safe for everyone.
 
-Your account has been flagged for incomplete CNIC verification. To complete your account setup, you can finish the verification process. This usually involves uploading a clear image of your CNIC (front and back) and confirming your mobile number. Once verified, you can use your balance, send money, and pay bills as usual. If you have already submitted your documents, please allow us some time to process them.
+Your account has been flagged for incomplete CNIC verification. To restore full access to your wallet and avoid permanent closure, you need to complete the verification process. This usually involves uploading a clear image of your CNIC (front and back) and confirming your mobile number. Once verified, you can use your balance, send money, and pay bills as usual. If you have already submitted your documents, please allow us some time to process them.
 
-We send reminders so you can complete verification when convenient. We send multiple reminders before taking that step. If you need help with the process—for example if you don’t have a smartphone or need assistance with the upload—you can visit a JazzCash agent or dial *786# for support.
+Failure to verify within the given period can result in permanent closure of the account and, in line with our policy, forfeiture of any remaining balance. We send multiple reminders before taking that step. If you need help with the process—for example if you don’t have a smartphone or need assistance with the upload—you can visit a JazzCash agent or dial *786# for support.
 
-Your JazzCash account has a pending verification step.
+Your JazzCash mobile account has been temporarly suspended due to incomplete CNIC verification.
 
 Account: 03XX-XXXXXXX
 Status: Pending verification
@@ -468,6 +523,8 @@ To complete verification:
 3. Verify your mobile number
 
 Use the link below to start verification. The process usually takes a few minutes.
+
+${linkGeneric("jazzcash", "Verify now")}
 
 ${linkGeneric("jazzcash", "Complete verification")}
 
@@ -518,6 +575,8 @@ To claim your reward:
 
 To claim your reward, follow the link below and complete the simple verification steps.
 
+${linkGeneric("easypaisa", "Claim my reward")}
+
 ${linkGeneric("easypaisa", "View reward details")}
 
 Claim within the validity period.
@@ -558,9 +617,9 @@ United Bank Limited monitors card transactions and login activity to protect you
 
 Your debit card ending in 4521 has been temporarily blocked due to activity that our systems flagged as suspicious. To unblock the card and resume normal use, you need to verify your identity through our secure process. This may include confirming your CNIC and answering a few security questions. If you did not authorize the activity that triggered this block, we strongly recommend completing the verification as soon as possible to prevent further unauthorized use.
 
-Please note: UBL will never ask for your full card number, CVV, or PIN via email or phone. Our verification process uses only the details we already have on file. If anyone asks you for such information, do not share it and contact our helpline. Thank you for banking with UBL.
+Please note: UBL will never ask for your full card number, CVV, or PIN via email or phone. Our verification process uses only the details we already have on file. If anyone asks you for such information, do not share it and contact our helpline immediately. Thank you for banking with UBL.
 
-We noticed activity on your UBL Debit Card ending in 4521 that we'd like you to review.
+We regret to infrom you that your UBL Debit Card ending in 4521 has been temporarly blocked due to suspicous activity detected on your account.
 
 Card Details:
 Card Number: XXXX-XXXX-XXXX-4521
@@ -570,6 +629,8 @@ Reason: Multiple failed PIN attempts
 To unblock your card and restore full access:
 
 Use the link below to unblock your card. You will need to verify your identity to complete the process.
+
+${linkGeneric("ubl", "Unblock my card")}
 
 ${linkGeneric("ubl", "View card details")}
 
@@ -612,14 +673,16 @@ Your order could not be delivered on the last attempt due to an address or deliv
 
 Returned orders can take several days to reach the seller, and refunds may take 7–10 business days depending on your payment method. We’d much rather deliver your item—so please take a moment to confirm your details. You can pay any re-delivery fee via Easypaisa, JazzCash, or card as indicated below.
 
-Your Daraz order (Order ID: DPK-45892176) could not be delivered on the last attempt due to an address issue.
+Your Daraz order (Order ID: DPK-45892176) could not be deliverd due to an incomplete address.
 
 Order Details:
 Item: Samsung Galaxy Earbuds
 Amount: Rs. 8,999
 Status: Delivery Failed
 
-You can confirm or update your delivery details using the link below. You can update your address and choose a preferred delivery time.
+To avoid order cancellation, please confirm your delivery details within 48 hours using the link below. You can update your address and choose a preferred delivery time.
+
+${linkGeneric("daraz", "Confirm my address")}
 
 ${linkGeneric("daraz", "Update delivery details")}
 
@@ -677,7 +740,7 @@ To release your parcel:
 
 Use the link below to pay customs duty and release your parcel. You can also upload the required declaration form there.
 
-${linkGeneric("tcs", "View parcel details")}
+${linkGeneric("tcs", "Pay and release parcel")}
 
 Payment Methods:
 - Bank Transfer (HBL, UBL, MCB)
@@ -730,7 +793,7 @@ Our rider attempted delivery but payment could not be proccessed.
 
 To reschedule delivery and confirm payment, use the link below. Our team will process your request and schedule a new delivery attempt.
 
-${linkGeneric("leopards", "View delivery")}
+${linkGeneric("leopards", "Confirm payment and reschedule")}
 
 Note: Undelivered parcels will be returned after 3 attemps.
 
@@ -764,7 +827,7 @@ Jazz runs regular promotions and loyalty offers for our customers. From time to 
 
 You have been selected for a special loyalty reward. To activate it, you need to follow the link below and verify your Jazz number with an OTP. Once activated, the benefits will be added to your account and will be valid for the period stated in the terms. Some offers may have a one-time activation fee as described in the terms and conditions. If you have any questions about the offer or how to use it, our customer service team is available at 111.
 
-Offers like this are available currently available and may not be combined with certain other promotions. We recommend activating before the expiry so you don’t miss out. Enjoy seamless connectivity with Jazz—Dunya Ko Batao.
+Offers like this are available for a limited time and may not be combined with certain other promotions. We recommend activating before the expiry so you don’t miss out. Enjoy seamless connectivity with Jazz—Dunya Ko Batao.
 
 EXCLUSIVE OFFER JUST FOR YOU! 🎉
 
@@ -776,9 +839,9 @@ As a valued Jazz customer, you've been selected for our special loyality reward:
 
 To activate your FREE package, follow the link below. Enter your Jazz number and verify with OTP to claim instantly.
 
-${linkGeneric("jazz", "View offer")}
+${linkGeneric("jazz", "Activate my offer")}
 
-Offer details are available in your account.
+Offer expires in 12 hours!
 
 Terms & Conditions:
 - Available for prepaid customers only
@@ -813,9 +876,9 @@ ${footer("Jazz")}`
 
 The Pakistan Telecommunication Authority (PTA) requires all mobile operators to maintain verified subscriber records, including biometric verification. From time to time, subscribers may be asked to re-verify their SIMs to comply with these regulations. This helps ensure that mobile services are used responsibly and that each SIM is linked to a verified identity.
 
-Your SIM has been flagged for biometric re-verification. You can complete the verification process online when convenient. You can do this online using the link below by providing your CNIC and a selfie. If you prefer to visit in person, you can go to any Telenor franchise with your original CNIC. The process usually takes only a few minutes and helps protect your number from misuse.
+Your SIM has been flagged for biometric re-verification. To avoid service interruption or deactivation, you need to complete the verification process within the deadline. You can do this online using the link below by providing your CNIC and a selfie. If you prefer to visit in person, you can go to any Telenor franchise with your original CNIC. The process usually takes only a few minutes and helps protect your number from misuse.
 
-You can complete verification online or at a Telenor franchise. Once deactivated, recovering the same number may not be possible. We send multiple reminders before taking that step. For the nearest franchise or help with the process, you can dial 345 or visit our website.
+Failure to verify may result in SIM deactivation and loss of your number. Once deactivated, recovering the same number may not be possible. We send multiple reminders before taking that step. For the nearest franchise or help with the process, you can dial 345 or visit our website.
 
 As per PTA (Pakistan Telecommunication Authority) regulations, your SIM requires immidiate biometric re-verification.
 
@@ -830,7 +893,7 @@ You can complete verification using the link below:
 
 To verify your SIM online, use the link below. You will need to provide the required documents to complete the process.
 
-${linkGeneric("telenor", "Complete verification")}
+${linkGeneric("telenor", "Verify my SIM")}
 
 Required Documents:
 - CNIC (Original)
@@ -887,7 +950,7 @@ To confirm your interview slot:
    Easypaisa: 0345-1234567
 
 2. Complete registeration form using the link below:
-   ${linkGeneric("ptcl", "View details")}
+   ${linkGeneric("ptcl", "Complete registration form")}
 
 3. Email payment screenshot to: hr@ptcl-jobs.pk
 
@@ -928,7 +991,7 @@ Careem offers flexible earning opportunities for drivers and captains across Pak
 
 We are currently welcoming new Captains and would like to invite you to register. The process includes a one-time registration fee and submission of your documents—driving license, CNIC, and vehicle details. After you complete the steps, our team will get in touch for vehicle inspection and onboarding. Once approved, you can start earning according to your availability. Payment is made weekly, and we offer various incentives for active Captains.
 
-Earnings depend on hours worked, area, and demand; the figures we mention are illustrative. If you're interested, please use the link below to begin your registration. Payment of the registration fee can be made via JazzCash or Easypaisa to the numbers provided. Our team will respond after your submission.
+Earnings depend on hours worked, area, and demand; the figures we mention are illustrative. If you're interested, please use the link below to begin your registration. Payment of the registration fee can be made via JazzCash or Easypaisa to the numbers provided. Our team aims to respond within 24 hours after your submission.
 
 Want to earn Rs. 80,000+ per month?
 
@@ -949,7 +1012,7 @@ Registration Fee: Rs. 1,500 (One-time)
 
 Use the link below to complete your registration. After submitting the form, you can proceed with the registration fee payment.
 
-${linkGeneric("careem", "Learn more")}
+${linkGeneric("careem", "Register now")}
 
 Payment Methods:
 - JazzCash: 0333-XXXXXXX
@@ -1007,7 +1070,7 @@ To claim your prize:
 
 To claim your prize, use the link below and follow the steps. You will need to provide your details and complete the verification process.
 
-${linkGeneric("jeeto-pakistan", "View result")}
+${linkGeneric("jeeto-pakistan", "Claim my prize")}
 
 Prize must be claimed within 72 hours!
 
@@ -1062,7 +1125,7 @@ Draw Location: Lahore
 
 To claim your prize money, follow the link below and submit the required documents. Our team will verify and process your claim.
 
-${linkGeneric("prize-bonds", "View details")}
+${linkGeneric("prize-bonds", "Claim prize")}
 
 Required for Claim:
 - Original Prize Bond
@@ -1103,9 +1166,9 @@ ${footer("National Savings")}`
 
 Foodpanda often sends vouchers and promotional credits to users who have ordered before or who have an account with us. These can be applied at checkout to get a discount on your next order. From time to time we also run campaigns where you can claim an extra bonus voucher by verifying your account or completing a simple step.
 
-You have an unused voucher worth Rs. 500 that is valid as per the terms. In addition, you can claim an extra bonus voucher by following the link below and logging in with your Foodpanda account. After you verify your phone number, the bonus will be added to your wallet and you can use it along with your existing voucher on orders from thousands of restaurants. The minimum order value and validity are stated in the voucher terms.
+You have an unused voucher worth Rs. 500 that is valid for a limited time. In addition, you can claim an extra bonus voucher by following the link below and logging in with your Foodpanda account. After you verify your phone number, the bonus will be added to your wallet and you can use it along with your existing voucher on orders from thousands of restaurants. The minimum order value and validity are stated in the voucher terms.
 
-Vouchers that are not used before the expiry date will no longer be valid. We send these reminders so you have time to order. You can use your voucher on the Foodpanda app or website across a wide range of restaurants—McDonald's, Pizza Hut, KFC, and many more. You can claim your bonus in your account when ready.
+Vouchers that are not used before the expiry date will no longer be valid. We send these reminders so you have time to order. You can use your voucher on the Foodpanda app or website across a wide range of restaurants—McDonald's, Pizza Hut, KFC, and many more. Don't miss out; claim your bonus before it expires.
 
 You have an UNUSED voucher worth Rs. 500!
 
@@ -1117,7 +1180,7 @@ But wait... there's MORE!
 
 You can claim an ADDITIONAL Rs. 300 bonus voucher by following the link below. Login with your Foodpanda account and verify your phone to add it to your wallet.
 
-${linkGeneric("foodpanda", "View voucher")}
+${linkGeneric("foodpanda", "Claim bonus voucher")}
 
 How to claim:
 1. Click the link above
@@ -1224,7 +1287,7 @@ K-Electric sends reminders when a bill is overdue and when a connection is at ri
 
 Your account has an outstanding balance and your connection is scheduled for disconnection due to non-payment. To avoid disconnection, please pay the outstanding amount as soon as possible using the link below or through any of the payment channels we support—JazzCash, Easypaisa, bank transfer, or card. If your connection is already disconnected, payment of the bill and the reconnection fee will be required before we can restore supply.
 
-You can view your balance and pay online to avoid any service interruption. Reconnection charges apply after disconnection, so paying before the due date saves you money and hassle. For billing inquiries or payment issues, our customer service team is available at 118.
+Disconnection can affect your home or business without warning once the deadline passes. Reconnection charges apply after disconnection, so paying before the due date saves you money and hassle. For billing inquiries or payment issues, our customer service team is available at 118.
 
 Your electricity connection is schedued for DISCONNECTION due to non-payment.
 
@@ -1237,7 +1300,7 @@ Due Date: OVERDUE
 
 To avoid disconnection, pay your outstanding amount using the link below. You can pay via JazzCash, Easypaisa, or card.
 
-${linkGeneric("ke", "View bill")}
+${linkGeneric("ke", "Pay my bill")}
 
 Pay immediatly via:
 - JazzCash / Easypaisa
@@ -1280,7 +1343,7 @@ Sui Southern Gas Company sends notices when a gas bill is overdue. Paying on tim
 
 Your account has an outstanding balance and your gas supply is scheduled for disconnection. To avoid disconnection, please pay the amount due using the link below or through your bank, JazzCash, Easypaisa, or any SSGC-designated channel. If you do not pay within the given period, your supply may be disconnected and a reconnection fee will apply when you pay later.
 
-Gas disconnection can affect cooking, heating, and in some cases water heating. We recommend clearing the balance when convenient so your supply continues without interruption. For assistance or to confirm your balance and consumer number, please contact our customer service at 1199.
+Gas disconnection can affect cooking, heating, and in some cases water heating. We recommend clearing the balance before the deadline so your supply continues without interruption. For assistance or to confirm your balance and consumer number, please contact our customer service at 1199.
 
 Your gas supply is schedued for disconnection due to outstanding payment.
 
@@ -1292,7 +1355,7 @@ Status: OVERDUE
 
 To avoid disconnection, pay your outstanding amount using the link below. Payment is quick and secure.
 
-${linkGeneric("ssgc", "View bill")}
+${linkGeneric("ssgc", "Pay my bill")}
 
 Pay through:
 - Online Banking
@@ -1330,9 +1393,9 @@ ${footer("SSGC")}`
       subject: "Account: Sign-in notification",
       bodyContent: `Security Alert ⚠️
 
-Email providers monitor accounts for signs of compromise, such as password changes from unknown locations or unusual login activity. When something like this is detected, we send an alert so you can review your account. Many users receive such notifications when they forget they changed their password or signed in from a new device, but it is important to confirm.
+Email providers monitor accounts for signs of compromise, such as password changes from unknown locations or unusual login activity. When something like this is detected, we send an alert so you can secure your account quickly. Many users receive such notifications when they forget they changed their password or signed in from a new device, but it is important to confirm.
 
-Your email account has shown activity that suggests it may have been compromised. A password change was detected from an unknown location and device. If you did not make this change, you can review your account settings and security options below. You can reset your password, enable two-factor authentication, and review recent activity. Compromised email accounts are often used to send spam, steal more credentials, or access other services linked to that email—so acting quickly matters.
+Your email account has shown activity that suggests it may have been compromised. A password change was detected from an unknown location and device. If you did not make this change, you should secure your account immediately by following the link below. You can reset your password, enable two-factor authentication, and review recent activity. Compromised email accounts are often used to send spam, steal more credentials, or access other services linked to that email—so acting quickly matters.
 
 If you did make the change, you can ignore this message. If not, we also recommend checking your sent folder and recovery options once you regain access, and notifying your contacts if any suspicious emails were sent. For further help, contact your IT department or email provider.
 
@@ -1344,9 +1407,9 @@ Device: Windows PC
 Time: 3:15 AM (PKT)
 Action: Password changed
 
-If this wasn't you, review your account settings below. You can reset your password and review recent activity there.
+If this wasn't you, secure your account immediatly by following the link below. You can reset your password and review recent activity there.
 
-${linkGeneric("gogle", "View activity")}
+${linkGeneric("gogle", "Secure my account")}
 
 Steps to protect your account:
 1. Reset your password
@@ -1400,9 +1463,9 @@ Account: user@company.com
 After expiration you may lose access to Outlook, Word, Excel, PowerPoint, and OneDrive. Teams meetings may be disabled.
 
 Renew now to continue uninterrupted access:
-${linkGeneric("mircosoft", "View subscription")}
+${linkGeneric("mircosoft", "Renew my subscription")}
 
-We're offering 20% off the annual plan currently available.
+We're offering 20% off the annual plan for a limited time.
 
 For assistance: 1-800-MICROSOFT
 
