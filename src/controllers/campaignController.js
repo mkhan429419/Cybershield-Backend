@@ -970,18 +970,8 @@ const executeEmailCampaign = async (campaign) => {
           await emailRecord.save();
           campaign.emailRecords.push(emailRecord._id);
         } else {
-          // Format email body
-          let emailHtml = campaign.emailConfig.bodyContent;
-          if (!emailHtml.includes("<")) {
-            emailHtml = emailHtml.replace(/\n/g, "<br>");
-            emailHtml = `<html><body style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">${emailHtml}</body></html>`;
-          }
-          const learningDisclaimer = '<p style="font-size:9px;color:#888;margin-top:24px;">For learning purposes only.</p>';
-          if (emailHtml.includes("</body>")) {
-            emailHtml = emailHtml.replace("</body>", learningDisclaimer + "</body>");
-          } else {
-            emailHtml = emailHtml + learningDisclaimer;
-          }
+          // Format email body: preserve paragraphs and line breaks (works for plain text and HTML links)
+          const emailHtml = formatEmailForSending(campaign.emailConfig.bodyContent);
 
           const result = await nodemailerService.sendEmail({
             to: target.email,

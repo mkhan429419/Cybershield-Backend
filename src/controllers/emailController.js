@@ -67,18 +67,8 @@ const sendEmail = async (req, res) => {
       });
     }
 
-    // Format email body - convert plain text to HTML
-    let emailHtml = bodyContent;
-    if (!emailHtml.includes("<")) {
-      emailHtml = emailHtml.replace(/\n/g, "<br>");
-      emailHtml = `<html><body style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">${emailHtml}</body></html>`;
-    }
-    const learningDisclaimer = '<p style="font-size:9px;color:#888;margin-top:24px;">For learning purposes only.</p>';
-    if (emailHtml.includes("</body>")) {
-      emailHtml = emailHtml.replace("</body>", learningDisclaimer + "</body>");
-    } else {
-      emailHtml = emailHtml + learningDisclaimer;
-    }
+    // Format email body: preserve paragraphs and line breaks (works for plain text and HTML links)
+    const emailHtml = formatEmailForSending(bodyContent);
 
     // Send emails to all recipients sequentially
     const results = {
