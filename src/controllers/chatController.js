@@ -5,7 +5,7 @@ const geminiService = require("../services/geminiService");
  */
 async function sendMessage(req, res) {
   try {
-    const { message, conversationHistory = [] } = req.body;
+    const { message, conversationHistory = [], language = "en" } = req.body;
     const userId = req.userId;
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -15,8 +15,14 @@ async function sendMessage(req, res) {
       });
     }
 
+    // Determine response language
+    const responseLanguage = language === "ur" ? "Urdu" : "English";
+    const languageInstruction = language === "ur" 
+      ? "\n\n**CRITICAL: You MUST respond in Urdu (اردو). All your responses should be in Urdu language. Use Urdu script for all text. If the user asks in Urdu, respond in Urdu. If the user asks in English but the language preference is Urdu, still respond in Urdu.**"
+      : "\n\n**CRITICAL: You MUST respond in English. All your responses should be in English language.**";
+
     // Build conversation context for Gemini
-    const systemPrompt = `You are Sentra, a specialized cybersecurity assistant for CyberShield, a comprehensive cybersecurity awareness and incident reporting platform designed for educational institutions and the general public in Pakistan.
+    const systemPrompt = `You are Sentra, a specialized cybersecurity assistant for CyberShield, a comprehensive cybersecurity awareness and incident reporting platform designed for educational institutions and the general public in Pakistan.${languageInstruction}
 
 **IMPORTANT: You MUST ONLY answer questions related to:**
 1. CyberShield platform features and functionality
@@ -77,10 +83,11 @@ CyberShield is a web-based cybersecurity awareness platform built with Next.js, 
 - Be friendly, professional, and concise
 - Provide practical, actionable cybersecurity advice
 - If asked about CyberShield features, explain them clearly based on the information above
-- If asked about non-cybersecurity topics, politely decline: "I'm Sentra, a cybersecurity assistant for CyberShield. I can only help with questions related to cybersecurity and the CyberShield platform. How can I assist you with cybersecurity today?"
+- If asked about non-cybersecurity topics, politely decline in ${responseLanguage}: ${language === "ur" ? '"میں سینٹرا ہوں، سائبر شیلڈ کے لیے ایک سائبرسیکیوریٹی اسسٹنٹ۔ میں صرف سائبرسیکیوریٹی اور سائبر شیلڈ پلیٹ فارم سے متعلق سوالات میں مدد کر سکتا ہوں۔ میں آپ کی آج سائبرسیکیوریٹی کے بارے میں کیسے مدد کر سکتا ہوں؟"' : '"I\'m Sentra, a cybersecurity assistant for CyberShield. I can only help with questions related to cybersecurity and the CyberShield platform. How can I assist you with cybersecurity today?"'}
 - Keep responses clear and under 300 words when possible
 - Focus on helping users understand cybersecurity threats and how to protect themselves
-- Reference CyberShield features when relevant to the user's question`;
+- Reference CyberShield features when relevant to the user's question
+- ALWAYS respond in ${responseLanguage} language`;
 
     // Build conversation history for Gemini
     const chatHistory = conversationHistory.map((msg) => ({
@@ -119,7 +126,11 @@ CyberShield is a web-based cybersecurity awareness platform built with Next.js, 
         },
         {
           role: "model",
-          parts: [{ text: "I understand. I'm Sentra, your cybersecurity assistant for CyberShield. I can help you with questions about cybersecurity best practices, phishing threats, security awareness, and CyberShield platform features. How can I assist you today?" }],
+          parts: [{ 
+            text: language === "ur" 
+              ? "میں سمجھ گیا ہوں۔ میں سینٹرا ہوں، آپ کا سائبر شیلڈ کے لیے سائبرسیکیوریٹی اسسٹنٹ۔ میں آپ کی سائبرسیکیوریٹی کی بہترین پریکٹسز، فشنگ کے خطرات، سیکیوریٹی بیداری، اور سائبر شیلڈ پلیٹ فارم کی خصوصیات کے بارے میں سوالات میں مدد کر سکتا ہوں۔ میں آپ کی آج کیسے مدد کر سکتا ہوں؟"
+              : "I understand. I'm Sentra, your cybersecurity assistant for CyberShield. I can help you with questions about cybersecurity best practices, phishing threats, security awareness, and CyberShield platform features. How can I assist you today?"
+          }],
         },
         ...chatHistory,
       ],
