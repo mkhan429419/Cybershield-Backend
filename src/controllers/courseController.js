@@ -4,6 +4,7 @@ const CourseProgress = require("../models/CourseProgress");
 const User = require("../models/User");
 const { isCourseCompleted, generateCertificateNumber } = require("./certificateController");
 const Certificate = require("../models/Certificate");
+const { getBadgeLabel } = require("../utils/badgeMapping");
 
 /**
  * GET /api/courses
@@ -378,6 +379,29 @@ async function markComplete(req, res) {
           console.error("Error auto-generating certificate:", certError);
           // Don't fail the request if certificate generation fails
         }
+      }
+
+      // Assign badges from course to user profile
+      try {
+        const course = await Course.findById(courseId).select("badges").lean();
+        if (course && course.badges && Array.isArray(course.badges) && course.badges.length > 0) {
+          // Transform badge IDs to labels before storing
+          const badgeLabels = course.badges
+            .map(badgeId => getBadgeLabel(badgeId))
+            .filter(label => label !== null); // Filter out invalid badge IDs
+          
+          if (badgeLabels.length > 0) {
+            // Add badge labels to user's profile (using $addToSet to avoid duplicates)
+            await User.findByIdAndUpdate(
+              userId,
+              { $addToSet: { badges: { $each: badgeLabels } } },
+              { new: true }
+            );
+          }
+        }
+      } catch (badgeError) {
+        console.error("Error assigning badges:", badgeError);
+        // Don't fail the request if badge assignment fails
       }
     }
     

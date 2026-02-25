@@ -1,5 +1,6 @@
 const { clerkClient } = require('@clerk/clerk-sdk-node');
 const User = require('../models/User');
+const { transformBadgesFromLabels } = require('../utils/badgeMapping');
 
 // GET /api/users/me
 const getUserProfile = async (req, res) => {
@@ -14,6 +15,20 @@ const getUserProfile = async (req, res) => {
       console.error('Error fetching Clerk user data:', error);
     }
 
+    // Ensure user.badges is properly loaded (in case it's not populated)
+    const userBadges = Array.isArray(user.badges) ? user.badges : [];
+    
+    // Transform badges from labels (or IDs) to objects with labels
+    // Handles both cases: badges stored as labels or as IDs
+    let transformedBadges = [];
+    try {
+      transformedBadges = transformBadgesFromLabels(userBadges);
+    } catch (badgeError) {
+      console.error('Error transforming badges:', badgeError);
+      // Fallback to empty array if transformation fails
+      transformedBadges = [];
+    }
+    
     // Merge local and Clerk data
     const profile = {
       _id: user._id,
@@ -27,6 +42,7 @@ const getUserProfile = async (req, res) => {
       status: user.status,
       points: user.points,
       riskScore: user.riskScore,
+      badges: transformedBadges,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       // Additional Clerk data if available

@@ -42,7 +42,10 @@ const userSchema = new mongoose.Schema({
   riskScore: {
     type: Number,
     default: 0
-  }
+  },
+  badges: [{
+    type: String
+  }]
 }, {
   timestamps: true
 });
