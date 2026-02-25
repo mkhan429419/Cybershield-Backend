@@ -55,6 +55,7 @@ const whatsAppCampaignSchema = new mongoose.Schema(
           default: "pending",
         },
         messageSid: String, // Twilio Message SID – used by webhook to update the correct campaign
+        clickToken: String, // Random token for click tracking – appended as ?ct= to landing URL
         sentAt: Date,
         deliveredAt: Date,
         readAt: Date,
@@ -118,5 +119,6 @@ whatsAppCampaignSchema.index({ organizationId: 1, status: 1 });
 whatsAppCampaignSchema.index({ createdBy: 1 });
 whatsAppCampaignSchema.index({ scheduleDate: 1 });
 whatsAppCampaignSchema.index({ "targetUsers.messageSid": 1 });
+whatsAppCampaignSchema.index({ "targetUsers.clickToken": 1 });
 
 module.exports = mongoose.model("WhatsAppCampaign", whatsAppCampaignSchema);

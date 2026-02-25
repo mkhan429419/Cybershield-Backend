@@ -1,6 +1,29 @@
+const crypto = require("crypto");
 const WhatsAppCampaign = require("../models/WhatsAppCampaign");
 const twilioService = require("../services/twilioService");
 const User = require("../models/User");
+
+// Add invisible click-tracking param to URL (landing page will call backend with it, then strip from URL)
+const addTrackingParam = (url, token) => {
+  if (!url || !token) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set("ct", token);
+    return u.toString();
+  } catch {
+    return url + (url.includes("?") ? "&" : "?") + "ct=" + encodeURIComponent(token);
+  }
+};
+
+// Replace landing page URL in message body with tracking URL so we know which target clicked
+const injectTrackingLink = (messageTemplate, landingPageUrl, trackingUrl) => {
+  if (!messageTemplate || !landingPageUrl || !trackingUrl) return messageTemplate;
+  const normalized = (landingPageUrl || "").trim();
+  if (!normalized) return messageTemplate;
+  return messageTemplate.replace(new RegExp(escapeForRegex(normalized), "gi"), trackingUrl);
+};
+
+const escapeForRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const startCampaignScheduler = () => {
   setInterval(async () => {
@@ -218,8 +241,12 @@ const sendCampaignMessages = async (campaign) => {
       (target) => target.status === "pending"
     );
 
-    // Get the message template
-    const messageToSend = campaign.messageTemplate;
+    const messageTemplate = campaign.messageTemplate;
+    const landingPageUrl = (campaign.landingPageUrl || "").trim();
+    const trackingEnabled = campaign.trackingEnabled && landingPageUrl;
+    if (pendingTargets.length > 0) {
+      console.log("[Campaign Send] trackingEnabled:", trackingEnabled, "landingPageUrl:", landingPageUrl || "(empty)");
+    }
 
     for (const target of pendingTargets) {
       try {
@@ -227,6 +254,15 @@ const sendCampaignMessages = async (campaign) => {
           target.status = "failed";
           target.failureReason = "Invalid phone number";
           continue;
+        }
+        let messageToSend = messageTemplate;
+        let clickToken = null;
+        if (trackingEnabled) {
+          clickToken = crypto.randomBytes(24).toString("hex");
+          const trackingUrl = addTrackingParam(landingPageUrl, clickToken);
+          messageToSend = injectTrackingLink(messageTemplate, landingPageUrl, trackingUrl);
+          const wasReplaced = messageToSend !== messageTemplate;
+          console.log("[Campaign Send] Click tracking: token", clickToken.substring(0, 8) + "...", "trackingUrl:", trackingUrl.substring(0, 70) + (trackingUrl.length > 70 ? "..." : ""), "linkInMessageReplaced:", wasReplaced);
         }
         const result = await twilioService.sendWhatsAppMessage(
           target.phoneNumber,
@@ -237,7 +273,9 @@ const sendCampaignMessages = async (campaign) => {
           target.status = "sent";
           target.sentAt = new Date();
           if (result.messageId) target.messageSid = result.messageId;
+          if (clickToken) target.clickToken = clickToken;
           campaign.stats.totalSent += 1;
+          if (clickToken) console.log("[Campaign Send] Stored clickToken for target. Test click URL: .../click?t=" + clickToken.substring(0, 12) + "...");
         } else {
           target.status = "failed";
           target.failureReason = result.error;
@@ -505,6 +543,43 @@ const handleTwilioWebhook = async (req, res) => {
     res.status(500).send("Error");
   }
 };
+
+// Public endpoint: landing pages call this when user opens link with ?ct=TOKEN (no auth)
+const recordClick = async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  const token = (req.query.t || req.query.ct || "").trim();
+  console.log("[Click] Request received. Query:", { t: req.query.t, ct: req.query.ct }, "token length:", token?.length || 0, "token preview:", token ? token.substring(0, 8) + "..." : "(empty)");
+  if (!token) {
+    console.log("[Click] No token in query – returning 204");
+    return res.status(204).end();
+  }
+  try {
+    const campaign = await WhatsAppCampaign.findOne({ "targetUsers.clickToken": token });
+    if (!campaign) {
+      console.log("[Click] No campaign found with clickToken:", token.substring(0, 8) + "... (check that this token exists on a targetUsers.clickToken)");
+      return res.status(204).end();
+    }
+    const target = campaign.targetUsers.find((t) => t.clickToken === token);
+    if (!target) {
+      console.log("[Click] Campaign", campaign._id, "found but no target with this clickToken – returning 204");
+      return res.status(204).end();
+    }
+    if (target.status === "clicked") {
+      console.log("[Click] Target already clicked (idempotent). Campaign:", campaign._id, "totalClicked:", campaign.stats.totalClicked);
+      return res.status(204).end();
+    }
+    target.status = "clicked";
+    target.clickedAt = new Date();
+    campaign.stats.totalClicked += 1;
+    await campaign.save();
+    console.log("[Click] OK – campaign:", campaign._id, "target status -> clicked, totalClicked:", campaign.stats.totalClicked);
+    res.status(204).end();
+  } catch (error) {
+    console.error("[Click] Error:", error);
+    res.status(204).end();
+  }
+};
+
 module.exports = {
   createCampaign,
   getCampaigns,
@@ -514,4 +589,5 @@ module.exports = {
   deleteCampaign,
   getCampaignAnalytics,
   handleTwilioWebhook,
+  recordClick,
 };
