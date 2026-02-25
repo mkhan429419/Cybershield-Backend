@@ -9,12 +9,61 @@ const { getBadgeLabel } = require("../utils/badgeMapping");
 /**
  * GET /api/courses
  * List courses (all or filtered). Optionally by createdBy.
+ * RBAC: Filters courses based on user role and organization.
  */
 async function getCourses(req, res) {
   try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
     const { createdBy, sort = "newest", limit = "50", page = "1" } = req.query;
     const filter = {};
     if (createdBy) filter.createdBy = createdBy;
+
+    // RBAC: Filter courses based on user role
+    // System admins: See only courses with orgId = null (courses for non-affiliated users)
+    // Client admins: See only courses from their organization
+    // Affiliated users: See only courses from their organization
+    // Non-affiliated users: See only courses with orgId = null (system admin courses)
+    if (user.role === "system_admin") {
+      // System admins see only courses for non-affiliated users (orgId = null)
+      filter.orgId = null;
+    } else if (user.role === "client_admin" || user.role === "affiliated") {
+      // Client admins and affiliated users see only their organization's courses
+      const userOrgId = user.orgId?._id?.toString() || user.orgId?.toString();
+      if (userOrgId) {
+        filter.orgId = userOrgId;
+      } else {
+        // User has no organization, return empty
+        return res.status(200).json({
+          success: true,
+          courses: [],
+          pagination: {
+            page: 1,
+            limit: 50,
+            total: 0,
+            pages: 1,
+          },
+        });
+      }
+    } else if (user.role === "non_affiliated") {
+      // Non-affiliated users see only system admin courses (orgId = null)
+      filter.orgId = null;
+    } else {
+      // Unknown role, return empty
+      return res.status(200).json({
+        success: true,
+        courses: [],
+        pagination: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          pages: 1,
+        },
+      });
+    }
 
     const sortOption = sort === "oldest" ? { createdAt: 1 } : { createdAt: -1 };
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100);
@@ -75,13 +124,42 @@ async function getCourses(req, res) {
 /**
  * GET /api/courses/:id
  * Get a single course by id.
+ * RBAC: Checks if user has access to this course.
  */
 async function getCourseById(req, res) {
   try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
     const course = await Course.findById(req.params.id).lean();
 
     if (!course) {
       return res.status(404).json({ success: false, error: "Course not found" });
+    }
+
+    // RBAC: Check if user has access to this course
+    const userOrgId = user.orgId?._id?.toString() || user.orgId?.toString();
+    const courseOrgId = course.orgId?.toString() || null;
+
+    if (user.role === "system_admin") {
+      // System admins can only access courses for non-affiliated users (orgId = null)
+      if (courseOrgId !== null) {
+        return res.status(403).json({ success: false, error: "Access denied. System admins can only access courses for non-affiliated users" });
+      }
+    } else if (user.role === "client_admin" || user.role === "affiliated") {
+      // Client admins and affiliated users can only access their organization's courses
+      if (!userOrgId || userOrgId !== courseOrgId) {
+        return res.status(403).json({ success: false, error: "Access denied to this course" });
+      }
+    } else if (user.role === "non_affiliated") {
+      // Non-affiliated users can only access system admin courses (orgId = null)
+      if (courseOrgId !== null) {
+        return res.status(403).json({ success: false, error: "Access denied to this course" });
+      }
+    } else {
+      return res.status(403).json({ success: false, error: "Access denied" });
     }
 
     const hasStored = course.createdByName != null || course.createdByEmail != null;
@@ -108,13 +186,23 @@ async function getCourseById(req, res) {
  * POST /api/courses
  * Create a new course. Body: { courseTitle, description, modules }.
  * createdBy set from req.user._id.
+ * RBAC: Only system_admin and client_admin can create courses.
+ * System admin courses have orgId = null (visible to non-affiliated users).
+ * Client admin courses have orgId = their organization (visible to their org users).
  */
 async function createCourse(req, res) {
   try {
-    const userId = req.user?._id;
-    if (!userId) {
+    const user = req.user;
+    if (!user || !user._id) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
+
+    // RBAC: Only system_admin and client_admin can create courses
+    if (user.role !== "system_admin" && user.role !== "client_admin") {
+      return res.status(403).json({ success: false, error: "Insufficient permissions to create courses" });
+    }
+
+    const userId = user._id;
 
     const { courseTitle, description, modules, badges, level } = req.body || {};
     if (!courseTitle || typeof courseTitle !== "string" || !courseTitle.trim()) {
@@ -161,9 +249,9 @@ async function createCourse(req, res) {
         }))
       : [];
 
-    const user = await User.findById(userId).select("displayName email").lean();
-    const createdByName = (user && user.displayName) ? user.displayName : "";
-    const createdByEmail = (user && user.email) ? user.email : "";
+    const userDoc = await User.findById(userId).select("displayName email").lean();
+    const createdByName = (userDoc && userDoc.displayName) ? userDoc.displayName : "";
+    const createdByEmail = (userDoc && userDoc.email) ? userDoc.email : "";
 
     const normalizedBadges = Array.isArray(badges)
       ? badges.map((b) => String(b).trim()).filter(Boolean)
@@ -171,6 +259,21 @@ async function createCourse(req, res) {
 
     const normalizedLevel =
       level === "advanced" || level === "basic" ? level : "basic";
+
+    // Set orgId based on creator role
+    // System admins: orgId = null (visible to non-affiliated users)
+    // Client admins: orgId = their organization (visible to their org users)
+    let courseOrgId = null;
+    if (user.role === "client_admin") {
+      // Handle both populated and non-populated orgId
+      const userOrgId = user.orgId?._id || user.orgId;
+      if (!userOrgId) {
+        return res.status(400).json({ success: false, error: "Client admin must belong to an organization" });
+      }
+      courseOrgId = userOrgId;
+    } else if (user.role === "system_admin") {
+      courseOrgId = null; // System admin courses are for non-affiliated users
+    }
 
     const course = new Course({
       courseTitle: courseTitle.trim(),
@@ -181,6 +284,7 @@ async function createCourse(req, res) {
       createdByName,
       createdByEmail,
       badges: normalizedBadges,
+      orgId: courseOrgId,
     });
 
     await course.save();
@@ -200,13 +304,22 @@ async function createCourse(req, res) {
 /**
  * PUT /api/courses/:id
  * Update a course. Body: { courseTitle, description, modules, badges }.
+ * RBAC: Only system_admin and client_admin can update courses.
+ * System admins can only update courses with orgId = null (for non-affiliated users).
+ * Client admins can only update courses from their organization.
  */
 async function updateCourse(req, res) {
   try {
-    const userId = req.user?._id;
-    if (!userId) {
+    const user = req.user;
+    if (!user || !user._id) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
+
+    // RBAC: Only system_admin and client_admin can update courses
+    if (user.role !== "system_admin" && user.role !== "client_admin") {
+      return res.status(403).json({ success: false, error: "Insufficient permissions to update courses" });
+    }
+
     const courseId = req.params.id;
     if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
       return res.status(400).json({ success: false, error: "Invalid course id" });
@@ -214,6 +327,22 @@ async function updateCourse(req, res) {
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ success: false, error: "Course not found" });
+    }
+
+    // RBAC: System admins can only update courses for non-affiliated users (orgId = null)
+    if (user.role === "system_admin") {
+      const courseOrgId = course.orgId?.toString() || null;
+      if (courseOrgId !== null) {
+        return res.status(403).json({ success: false, error: "Access denied. System admins can only update courses for non-affiliated users" });
+      }
+    }
+    // RBAC: Client admins can only update courses from their organization
+    else if (user.role === "client_admin") {
+      const userOrgId = user.orgId?._id?.toString() || user.orgId?.toString();
+      const courseOrgId = course.orgId?.toString() || null;
+      if (!userOrgId || userOrgId !== courseOrgId) {
+        return res.status(403).json({ success: false, error: "Access denied. You can only update courses from your organization" });
+      }
     }
     const { courseTitle, description, modules, badges, level } = req.body || {};
     if (courseTitle !== undefined) {
@@ -283,13 +412,22 @@ async function updateCourse(req, res) {
 /**
  * DELETE /api/courses/:id
  * Delete a course and all its progress records.
+ * RBAC: Only system_admin and client_admin can delete courses.
+ * System admins can only delete courses with orgId = null (for non-affiliated users).
+ * Client admins can only delete courses from their organization.
  */
 async function deleteCourse(req, res) {
   try {
-    const userId = req.user?._id;
-    if (!userId) {
+    const user = req.user;
+    if (!user || !user._id) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
+
+    // RBAC: Only system_admin and client_admin can delete courses
+    if (user.role !== "system_admin" && user.role !== "client_admin") {
+      return res.status(403).json({ success: false, error: "Insufficient permissions to delete courses" });
+    }
+
     const courseId = req.params.id;
     if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
       return res.status(400).json({ success: false, error: "Invalid course id" });
@@ -297,6 +435,22 @@ async function deleteCourse(req, res) {
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ success: false, error: "Course not found" });
+    }
+
+    // RBAC: System admins can only delete courses for non-affiliated users (orgId = null)
+    if (user.role === "system_admin") {
+      const courseOrgId = course.orgId?.toString() || null;
+      if (courseOrgId !== null) {
+        return res.status(403).json({ success: false, error: "Access denied. System admins can only delete courses for non-affiliated users" });
+      }
+    }
+    // RBAC: Client admins can only delete courses from their organization
+    else if (user.role === "client_admin") {
+      const userOrgId = user.orgId?._id?.toString() || user.orgId?.toString();
+      const courseOrgId = course.orgId?.toString() || null;
+      if (!userOrgId || userOrgId !== courseOrgId) {
+        return res.status(403).json({ success: false, error: "Access denied. You can only delete courses from your organization" });
+      }
     }
     await CourseProgress.deleteMany({ course: courseId });
     await Course.findByIdAndDelete(courseId);

@@ -55,11 +55,17 @@ const courseSchema = new mongoose.Schema(
     createdByName: { type: String, default: "" },
     createdByEmail: { type: String, default: "" },
     badges: [{ type: String }],
+    orgId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      default: null, // null for system admin courses (visible to non-affiliated users)
+    },
   },
   { timestamps: true }
 );
 
 courseSchema.index({ createdBy: 1, createdAt: -1 });
 courseSchema.index({ courseTitle: "text", description: "text" });
+courseSchema.index({ orgId: 1 }); // Index for organization-based queries
 
 module.exports = mongoose.model("Course", courseSchema);
