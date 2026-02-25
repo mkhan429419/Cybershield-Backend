@@ -139,6 +139,9 @@ async function createCourse(req, res) {
                           url: String(m.url || "").trim(),
                           alt: String(m.alt || "").trim(),
                           caption: String(m.caption || "").trim(),
+                          publicId: String(m.publicId || "").trim(),
+                          subtitleUrl: String(m.subtitleUrl || "").trim(),
+                          youtubeId: String(m.youtubeId || "").trim(), // YouTube video ID
                         }))
                         .filter((m) => m.url)
                     : [],
@@ -239,6 +242,9 @@ async function updateCourse(req, res) {
                         url: String(m.url || "").trim(),
                         alt: String(m.alt || "").trim(),
                         caption: String(m.caption || "").trim(),
+                        publicId: String(m.publicId || "").trim(),
+                        subtitleUrl: String(m.subtitleUrl || "").trim(),
+                        youtubeId: String(m.youtubeId || "").trim(), // YouTube video ID
                       }))
                       .filter((m) => m.url)
                   : [],

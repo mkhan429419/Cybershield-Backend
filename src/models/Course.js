@@ -6,6 +6,9 @@ const mediaItemSchema = new mongoose.Schema(
     url: { type: String, required: true },
     alt: { type: String, default: "" },
     caption: { type: String, default: "" },
+    publicId: { type: String, default: "" }, // Cloudinary public ID (for images or legacy videos)
+    subtitleUrl: { type: String, default: "" }, // URL with subtitle overlay (for legacy Cloudinary videos)
+    youtubeId: { type: String, default: "" }, // YouTube video ID (for videos uploaded to YouTube)
   },
   { _id: false }
 );
