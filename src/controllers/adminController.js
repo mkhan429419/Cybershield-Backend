@@ -478,6 +478,38 @@ const revokeInvitation = async (req, res) => {
   }
 };
 
+// GET /api/admins/email-risk-summary - platform-wide email risk for system_admin
+const getEmailRiskSummary = async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const users = await User.find({ role: { $in: ['affiliated', 'non_affiliated'] } })
+      .select('_id displayName email emailRiskScore role')
+      .sort({ emailRiskScore: -1 })
+      .limit(Number(limit))
+      .lean();
+    const withScore = users.filter(u => u.emailRiskScore != null && u.emailRiskScore > 0);
+    const sum = withScore.reduce((a, u) => a + (u.emailRiskScore || 0), 0);
+    const averageEmailRiskScore = withScore.length > 0 ? sum / withScore.length : 0;
+    res.json({
+      success: true,
+      data: {
+        averageEmailRiskScore: Math.round(averageEmailRiskScore * 100) / 100,
+        totalUsers: users.length,
+        users: users.map(u => ({
+          _id: u._id,
+          displayName: u.displayName,
+          email: u.email,
+          emailRiskScore: u.emailRiskScore != null ? u.emailRiskScore : 0,
+          role: u.role
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Email risk summary error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch email risk summary' });
+  }
+};
+
 module.exports = {
   inviteClientAdmin,
   getOrganizations,
@@ -486,5 +518,6 @@ module.exports = {
   createOrganization,
   updateOrganization,
   getPendingInvitations,
-  revokeInvitation
+  revokeInvitation,
+  getEmailRiskSummary
 };

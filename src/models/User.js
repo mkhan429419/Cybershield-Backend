@@ -43,6 +43,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  emailRiskScore: {
+    type: Number,
+    default: 0
+  },
   badges: [{
     type: String
   }]

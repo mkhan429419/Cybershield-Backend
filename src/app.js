@@ -22,8 +22,93 @@ const uploadRoutes = require("./routes/upload");
 const Email = require("./models/Email");
 const Campaign = require("./models/Campaign");
 const WhatsAppCampaign = require("./models/WhatsAppCampaign");
+const EmailRiskEvent = require("./models/EmailRiskEvent");
+const User = require("./models/User");
+const { isEligibleForEmailRiskScoring, updateUserEmailRiskScore } = require("./services/emailRiskScoreService");
 
 const app = express();
+
+// Email risk event weights (opened 0.2, clicked 0.5, credentials 0.7). Only recorded for affiliated/non_affiliated users.
+const RECORD_EMAIL_RISK_EVENT = async (campaignId, sentToEmail, eventType, weight, emailId = null) => {
+  console.log("[EmailRisk] Called (campaign path)", { eventType, campaignId: String(campaignId), sentTo: sentToEmail, weight, emailId: emailId || null });
+  try {
+    const campaign = await Campaign.findById(campaignId).select("targetUsers").lean();
+    if (!campaign) {
+      console.log("[EmailRisk] Skip: campaign not found", campaignId);
+      return;
+    }
+    const targets = campaign.targetUsers || [];
+    console.log("[EmailRisk] Campaign has", targets.length, "target(s); matching by email");
+    const target = targets.find(
+      (t) => (t.email || "").toLowerCase() === (sentToEmail || "").toLowerCase()
+    );
+    if (!target) {
+      console.log("[EmailRisk] Skip: no target for email", sentToEmail, "| target emails:", targets.map((t) => t.email).join(", ") || "(none)");
+      return;
+    }
+    if (!target.userId) {
+      console.log("[EmailRisk] Skip: target has no userId (use org users, not manual email only)", sentToEmail);
+      return;
+    }
+    console.log("[EmailRisk] Target found userId=", target.userId, "| looking up user role");
+    const user = await User.findById(target.userId).select("role").lean();
+    if (!user) {
+      console.log("[EmailRisk] Skip: user not found", target.userId);
+      return;
+    }
+    if (!isEligibleForEmailRiskScoring(user.role)) {
+      console.log("[EmailRisk] Skip: user role not eligible for email risk", { role: user.role, sentTo: sentToEmail });
+      return;
+    }
+    await EmailRiskEvent.create({
+      userId: target.userId,
+      eventType,
+      campaignId,
+      emailId: emailId || undefined,
+      weight,
+    });
+    console.log("[EmailRisk] EmailRiskEvent created; updating user score for", target.userId);
+    await updateUserEmailRiskScore(target.userId);
+    console.log("[EmailRisk] Recorded (campaign path)", eventType, "for", sentToEmail, "userId", target.userId);
+  } catch (err) {
+    console.error("[EmailRisk] Record failed:", err.message, err.stack);
+  }
+};
+
+// Fallback when Email has no campaignId (e.g. sent from email phishing page /api/email-campaigns/send).
+// Look up user by recipient email; if affiliated/non_affiliated, record event and update score.
+const RECORD_EMAIL_RISK_EVENT_BY_EMAIL = async (sentToEmail, eventType, weight, emailId = null) => {
+  if (!sentToEmail || typeof sentToEmail !== "string") {
+    console.log("[EmailRisk] By-email skip: invalid sentToEmail", sentToEmail);
+    return;
+  }
+  const normalized = sentToEmail.trim().toLowerCase();
+  if (!normalized) {
+    console.log("[EmailRisk] By-email skip: empty email after trim");
+    return;
+  }
+  console.log("[EmailRisk] By-email fallback", { eventType, sentTo: normalized, weight, emailId: emailId || null });
+  try {
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }, role: { $in: ["affiliated", "non_affiliated"] } }).select("_id role email").lean();
+    if (!user) {
+      console.log("[EmailRisk] Skip: no affiliated/non_affiliated user found for email", normalized, "| check User exists with this email and role in [affiliated, non_affiliated]");
+      return;
+    }
+    console.log("[EmailRisk] By-email user found", { userId: user._id, role: user.role, email: user.email });
+    await EmailRiskEvent.create({
+      userId: user._id,
+      eventType,
+      campaignId: undefined,
+      emailId: emailId || undefined,
+      weight,
+    });
+    console.log("[EmailRisk] EmailRiskEvent created (no campaignId); updating user score for", user._id);
+    await updateUserEmailRiskScore(user._id);
+    console.log("[EmailRisk] Recorded (by email)", eventType, "for", normalized, "userId", user._id);
+  } catch (err) {
+    console.error("[EmailRisk] By-email record failed:", err.message, err.stack);
+  }
+};
 
 // 1x1 transparent GIF for email open tracking (Buffer method – no file read)
 const TRACKING_PIXEL_GIF = Buffer.from([
@@ -109,6 +194,7 @@ app.use(
           doc.openedAt = new Date();
           await doc.save();
           if (doc.campaignId) {
+            console.log("[EmailRisk] Open: Email has campaignId, using campaign path");
             await Campaign.updateOne(
               { _id: doc.campaignId },
               {
@@ -120,6 +206,10 @@ app.use(
               },
               { arrayFilters: [{ "elem.email": doc.sentTo }] }
             );
+            await RECORD_EMAIL_RISK_EVENT(doc.campaignId, doc.sentTo, "email_opened", 0.2, doc._id);
+          } else {
+            console.log("[EmailRisk] Open: Email has no campaignId, using by-email path");
+            await RECORD_EMAIL_RISK_EVENT_BY_EMAIL(doc.sentTo, "email_opened", 0.2, doc._id);
           }
           console.log("Email open recorded", { id, sentTo: doc.sentTo });
         }
@@ -160,6 +250,7 @@ app.get("/track/click/:id", async (req, res) => {
           doc.clickedAt = new Date();
           await doc.save();
           if (doc.campaignId) {
+            console.log("[EmailRisk] Click: Email has campaignId, using campaign path");
             await Campaign.updateOne(
               { _id: doc.campaignId },
               {
@@ -171,6 +262,10 @@ app.get("/track/click/:id", async (req, res) => {
               },
               { arrayFilters: [{ "elem.email": doc.sentTo }] }
             );
+            await RECORD_EMAIL_RISK_EVENT(doc.campaignId, doc.sentTo, "email_clicked", 0.5, doc._id);
+          } else {
+            console.log("[EmailRisk] Click: Email has no campaignId, using by-email path");
+            await RECORD_EMAIL_RISK_EVENT_BY_EMAIL(doc.sentTo, "email_clicked", 0.5, doc._id);
           }
           console.log("Email click recorded", { id, sentTo: doc.sentTo });
         }
@@ -208,6 +303,7 @@ app.post("/track/credentials", express.json(), async (req, res) => {
         doc.credentialsEnteredAt = new Date();
         await doc.save();
         if (doc.campaignId) {
+          console.log("[EmailRisk] Credentials: Email has campaignId, using campaign path");
           await Campaign.updateOne(
             { _id: doc.campaignId },
             {
@@ -219,6 +315,10 @@ app.post("/track/credentials", express.json(), async (req, res) => {
             },
             { arrayFilters: [{ "elem.email": doc.sentTo }] }
           );
+          await RECORD_EMAIL_RISK_EVENT(doc.campaignId, doc.sentTo, "email_credentials_submitted", 0.7, doc._id);
+        } else {
+          console.log("[EmailRisk] Credentials: Email has no campaignId, using by-email path");
+          await RECORD_EMAIL_RISK_EVENT_BY_EMAIL(doc.sentTo, "email_credentials_submitted", 0.7, doc._id);
         }
         console.log("Email credentials entered recorded", { id: emailId, sentTo: doc.sentTo });
       }

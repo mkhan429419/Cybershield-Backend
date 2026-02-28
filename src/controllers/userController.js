@@ -1,6 +1,7 @@
 const { clerkClient } = require('@clerk/clerk-sdk-node');
 const User = require('../models/User');
 const { transformBadgesFromLabels } = require('../utils/badgeMapping');
+const { isEligibleForEmailRiskScoring, computeEmailRiskScore } = require('../services/emailRiskScoreService');
 
 // GET /api/users/me
 const getUserProfile = async (req, res) => {
@@ -29,6 +30,14 @@ const getUserProfile = async (req, res) => {
       transformedBadges = [];
     }
     
+    // Email risk score: compounded from EmailRiskEvents only for affiliated / non_affiliated (decay applied).
+    let emailRiskScore = 0;
+    if (isEligibleForEmailRiskScoring(user.role)) {
+      emailRiskScore = await computeEmailRiskScore(user._id);
+    } else {
+      emailRiskScore = user.emailRiskScore != null ? user.emailRiskScore : 0;
+    }
+
     // Merge local and Clerk data
     const profile = {
       _id: user._id,
@@ -42,6 +51,7 @@ const getUserProfile = async (req, res) => {
       status: user.status,
       points: user.points,
       riskScore: user.riskScore,
+      emailRiskScore,
       badges: transformedBadges,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

@@ -391,6 +391,7 @@ const getOrgUsers = async (req, res) => {
         groups: user.groupIds.map(g => g.name),
         points: user.points,
         riskScore: user.riskScore,
+        emailRiskScore: user.emailRiskScore,
         createdAt: user.createdAt
       })),
       pagination: {
