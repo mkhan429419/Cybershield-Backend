@@ -394,6 +394,7 @@ const getOrgUsers = async (req, res) => {
         riskScore: user.riskScore,
         emailRiskScore: user.emailRiskScore,
         whatsappRiskScore: user.whatsappRiskScore,
+        lmsRiskScore: user.lmsRiskScore,
         createdAt: user.createdAt
       })),
       pagination: {

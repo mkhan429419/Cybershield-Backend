@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { transformBadgesFromLabels } = require('../utils/badgeMapping');
 const { isEligibleForEmailRiskScoring, computeEmailRiskScore } = require('../services/emailRiskScoreService');
 const { isEligibleForWhatsAppRiskScoring, computeWhatsAppRiskScore } = require('../services/whatsappRiskScoreService');
+const { isEligibleForLmsRiskScoring, computeLmsRiskScore } = require('../services/lmsRiskScoreService');
 
 // GET /api/users/me
 const getUserProfile = async (req, res) => {
@@ -47,6 +48,14 @@ const getUserProfile = async (req, res) => {
       whatsappRiskScore = user.whatsappRiskScore != null ? user.whatsappRiskScore : 0;
     }
 
+    // LMS risk score: 1 - (training completed / total available). Only for affiliated / non_affiliated.
+    let lmsRiskScore = 0;
+    if (isEligibleForLmsRiskScoring(user.role)) {
+      lmsRiskScore = await computeLmsRiskScore(user._id);
+    } else {
+      lmsRiskScore = user.lmsRiskScore != null ? user.lmsRiskScore : 0;
+    }
+
     // Merge local and Clerk data
     const profile = {
       _id: user._id,
@@ -63,6 +72,7 @@ const getUserProfile = async (req, res) => {
       riskScore: user.riskScore,
       emailRiskScore,
       whatsappRiskScore,
+      lmsRiskScore,
       badges: transformedBadges,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

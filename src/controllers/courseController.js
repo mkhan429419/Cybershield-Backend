@@ -6,6 +6,7 @@ const User = require("../models/User");
 const EmailTemplate = require("../models/EmailTemplate");
 const WhatsAppTemplate = require("../models/WhatsAppTemplate");
 const { isCourseCompleted, generateCertificateNumber } = require("./certificateController");
+const { updateUserLmsRiskScore } = require("../services/lmsRiskScoreService");
 const Certificate = require("../models/Certificate");
 const { getBadgeLabel } = require("../utils/badgeMapping");
 const nodemailerService = require("../services/nodemailerService");
@@ -733,6 +734,8 @@ async function markComplete(req, res) {
       { new: true, upsert: true }
     ).lean();
 
+    await updateUserLmsRiskScore(userId).catch(() => {});
+
     // Check if course is now completed and generate certificate if needed
     const courseIsCompleted = await isCourseCompleted(userId, courseId);
     let certificateGenerated = false;
@@ -821,6 +824,7 @@ async function unmarkComplete(req, res) {
       { $pull: { completed: id } },
       { new: true, upsert: true }
     ).lean();
+    await updateUserLmsRiskScore(userId).catch(() => {});
     return res.status(200).json({ success: true, completed: progress.completed });
   } catch (error) {
     console.error("unmarkComplete error:", error);
