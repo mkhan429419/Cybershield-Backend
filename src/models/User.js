@@ -16,6 +16,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  phoneNumber: {
+    type: String,
+    required: false,
+    default: null
+  },
   role: {
     type: String,
     enum: ['system_admin', 'client_admin', 'affiliated', 'non_affiliated'],
@@ -44,6 +49,22 @@ const userSchema = new mongoose.Schema({
     default: 0
   },
   emailRiskScore: {
+    type: Number,
+    default: 0
+  },
+  whatsappRiskScore: {
+    type: Number,
+    default: 0
+  },
+  lmsRiskScore: {
+    type: Number,
+    default: 0
+  },
+  voiceRiskScore: {
+    type: Number,
+    default: 0
+  },
+  incidentRiskScore: {
     type: Number,
     default: 0
   },

@@ -25,6 +25,7 @@ const WhatsAppCampaign = require("./models/WhatsAppCampaign");
 const EmailRiskEvent = require("./models/EmailRiskEvent");
 const User = require("./models/User");
 const { isEligibleForEmailRiskScoring, updateUserEmailRiskScore } = require("./services/emailRiskScoreService");
+const { recordWhatsAppRiskEvent } = require("./services/whatsappRiskScoreService");
 
 const app = express();
 
@@ -186,11 +187,12 @@ app.use(
       }
       const wasAlreadyOpened = !!doc.openedAt;
       if (!wasAlreadyOpened) {
-        // Ignore opens within 90s of send: Gmail/mail servers often fetch images on delivery (scanning),
-        // which would falsely mark as opened before the user actually opened the email.
         const sentTime = doc.createdAt || new Date();
         const secondsSinceSent = (Date.now() - new Date(sentTime).getTime()) / 1000;
-        if (secondsSinceSent >= 90) {
+        // For campaign emails: ignore opens within 90s (mail scanners often prefetch images).
+        // For course activity emails (no campaignId): always record so training telemetry works immediately.
+        const gracePeriodSec = doc.campaignId ? 90 : 0;
+        if (secondsSinceSent >= gracePeriodSec) {
           doc.openedAt = new Date();
           await doc.save();
           if (doc.campaignId) {
@@ -246,7 +248,9 @@ app.get("/track/click/:id", async (req, res) => {
       if (!wasAlreadyClicked) {
         const sentTime = doc.createdAt || new Date();
         const secondsSinceSent = (Date.now() - new Date(sentTime).getTime()) / 1000;
-        if (secondsSinceSent >= CLICK_GRACE_SECONDS) {
+        // For campaign emails: 90s grace to avoid prefetcher false positives. For course activity: record immediately.
+        const gracePeriodSec = doc.campaignId ? CLICK_GRACE_SECONDS : 0;
+        if (secondsSinceSent >= gracePeriodSec) {
           doc.clickedAt = new Date();
           await doc.save();
           if (doc.campaignId) {
@@ -346,6 +350,13 @@ app.post("/track/credentials", express.json(), async (req, res) => {
         target.reportedAt = new Date();
         campaign.stats.totalReported = (campaign.stats.totalReported || 0) + 1;
         await campaign.save();
+        if (target.userId) {
+          console.log("[WhatsAppRisk] Credentials: recording risk event for target.userId", target.userId.toString());
+          await recordWhatsAppRiskEvent(target.userId, "whatsapp_credentials_submitted", campaign._id, 0.7);
+        } else {
+          console.log("[WhatsAppRisk] Credentials: target has no userId – WhatsApp risk not recorded. Phone:", target.phoneNumber);
+        }
+        console.log("WhatsApp credentials entered recorded", { campaignId: campaign._id, phoneNumber: target.phoneNumber });
         if (campaign.managedByParentCampaign) {
           await Campaign.updateOne(
             { whatsappCampaignId: campaign._id },
@@ -359,7 +370,6 @@ app.post("/track/credentials", express.json(), async (req, res) => {
             { arrayFilters: [{ "elem.phoneNumber": target.phoneNumber }] }
           );
         }
-        console.log("WhatsApp credentials entered recorded", { campaignId: campaign._id, phoneNumber: target.phoneNumber });
       }
       return res.status(200).json({ success: true, recorded: !alreadyRecorded });
     } catch (err) {

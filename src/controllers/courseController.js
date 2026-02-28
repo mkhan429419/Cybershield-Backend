@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const mongoose = require("mongoose");
 const Course = require("../models/Course");
 const CourseProgress = require("../models/CourseProgress");
@@ -5,6 +6,7 @@ const User = require("../models/User");
 const EmailTemplate = require("../models/EmailTemplate");
 const WhatsAppTemplate = require("../models/WhatsAppTemplate");
 const { isCourseCompleted, generateCertificateNumber } = require("./certificateController");
+const { updateUserLmsRiskScore } = require("../services/lmsRiskScoreService");
 const Certificate = require("../models/Certificate");
 const { getBadgeLabel } = require("../utils/badgeMapping");
 const nodemailerService = require("../services/nodemailerService");
@@ -12,6 +14,23 @@ const { formatEmailForSending } = require("../services/emailFormatter");
 const twilioService = require("../services/twilioService");
 const Email = require("../models/Email");
 const WhatsAppCampaign = require("../models/WhatsAppCampaign");
+
+const LANDING_BASE = process.env.LANDING_PAGES_BASE_URL || "https://cybershieldlearningportal.vercel.app";
+const addTrackingParam = (url, token) => {
+  if (!url || !token) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set("ct", token);
+    return u.toString();
+  } catch {
+    return url + (url.includes("?") ? "&" : "?") + "ct=" + encodeURIComponent(token);
+  }
+};
+const escapeForRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const injectTrackingLink = (messageTemplate, landingPageUrl, trackingUrl) => {
+  if (!messageTemplate || !landingPageUrl || !trackingUrl) return messageTemplate;
+  return messageTemplate.replace(new RegExp(escapeForRegex(landingPageUrl.trim()), "gi"), trackingUrl);
+};
 
 /** Max counts per course level: modules (total), sections per module, MCQ questions per module */
 const COURSE_LIMITS = {
@@ -532,8 +551,8 @@ async function getProgress(req, res) {
 
 /**
  * GET /api/courses/:courseId/progress/activity-email-status?submoduleId=0-activity
- * Get telemetry status for the activity email (opened, clicked, credentials). Used to show Pass/Fail on the submodule page.
- * passed = opened and not clicked and not credentials entered.
+ * After the 5-min timer is up: read clickedAt and credentialsEnteredAt from MongoDB.
+ * Pass = neither clicked nor entered credentials. Fail = either is set.
  */
 async function getActivityEmailStatus(req, res) {
   try {
@@ -571,14 +590,10 @@ async function getActivityEmailStatus(req, res) {
         credentialsEnteredAt: null,
       });
     }
-    const opened = !!emailDoc.openedAt;
-    const credentialsEntered = !!emailDoc.credentialsEnteredAt;
-    // Only count click as fail if it happened AFTER open (avoids false positives from link prefetchers/scanners that hit the URL before user opens email)
-    const clickedAfterOpen =
-      emailDoc.openedAt &&
-      emailDoc.clickedAt &&
-      new Date(emailDoc.clickedAt) > new Date(emailDoc.openedAt);
-    const passed = opened && !credentialsEntered && !clickedAfterOpen;
+    // After 5 mins we only check these two from MongoDB: clickedAt and credentialsEnteredAt
+    const hasClicked = !!emailDoc.clickedAt;
+    const hasCredentials = !!emailDoc.credentialsEnteredAt;
+    const passed = !hasClicked && !hasCredentials;
     return res.status(200).json({
       success: true,
       hasEmail: true,
@@ -590,6 +605,70 @@ async function getActivityEmailStatus(req, res) {
   } catch (error) {
     console.error("getActivityEmailStatus error:", error);
     return res.status(500).json({ success: false, error: "Failed to fetch activity email status" });
+  }
+}
+
+/**
+ * POST /api/courses/:courseId/progress/activity-result
+ * Record the final pass/fail for an email activity when time is up. Body: { submoduleId, passed }.
+ */
+async function recordActivityResult(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const { courseId } = req.params;
+    const { submoduleId, passed } = req.body || {};
+    if (!submoduleId || typeof submoduleId !== "string" || !submoduleId.trim()) {
+      return res.status(400).json({ success: false, error: "submoduleId is required" });
+    }
+    if (typeof passed !== "boolean") {
+      return res.status(400).json({ success: false, error: "passed (boolean) is required" });
+    }
+    const id = submoduleId.trim();
+    if (!id.endsWith("-activity")) {
+      return res.status(400).json({ success: false, error: "submoduleId must end with -activity" });
+    }
+    await CourseProgress.findOneAndUpdate(
+      { user: userId, course: courseId },
+      { $set: { [`activityAttempts.${id}`]: { passed, attemptedAt: new Date() } } },
+      { upsert: true }
+    );
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("recordActivityResult error:", error);
+    return res.status(500).json({ success: false, error: "Failed to record activity result" });
+  }
+}
+
+/**
+ * POST /api/courses/:courseId/progress/activity-retry
+ * Clear the stored email id and attempt for this submodule so the user can try the activity again. Body: { submoduleId }.
+ */
+async function activityRetry(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const { courseId } = req.params;
+    const { submoduleId } = req.body || {};
+    if (!submoduleId || typeof submoduleId !== "string" || !submoduleId.trim()) {
+      return res.status(400).json({ success: false, error: "submoduleId is required" });
+    }
+    const id = submoduleId.trim();
+    if (!id.endsWith("-activity")) {
+      return res.status(400).json({ success: false, error: "submoduleId must end with -activity" });
+    }
+    await CourseProgress.findOneAndUpdate(
+      { user: userId, course: courseId },
+      { $unset: { [`activityEmailIds.${id}`]: 1, [`activityWhatsAppCampaignIds.${id}`]: 1, [`activityAttempts.${id}`]: 1 } }
+    );
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("activityRetry error:", error);
+    return res.status(500).json({ success: false, error: "Failed to reset activity for retry" });
   }
 }
 
@@ -622,30 +701,27 @@ async function markComplete(req, res) {
       if (emailId) {
         const emailDoc = await Email.findById(emailId).lean();
         if (emailDoc) {
-          const opened = !!emailDoc.openedAt;
-          const credentialsEntered = !!emailDoc.credentialsEnteredAt;
-          const clickedAfterOpen =
-            emailDoc.openedAt &&
-            emailDoc.clickedAt &&
-            new Date(emailDoc.clickedAt) > new Date(emailDoc.openedAt);
-          if (!opened) {
+          const hasClicked = !!emailDoc.clickedAt;
+          const hasCredentials = !!emailDoc.credentialsEnteredAt;
+          if (hasClicked || hasCredentials) {
             return res.status(400).json({
               success: false,
-              error: "Open the activity email first to pass. Do not click links or enter credentials.",
+              error: "You clicked a link or entered credentials. Do not click links or enter credentials to pass.",
             });
           }
-          if (clickedAfterOpen || credentialsEntered) {
+        }
+      }
+      const activityWhatsAppCampaignIds = progress?.activityWhatsAppCampaignIds;
+      const campaignId = typeof activityWhatsAppCampaignIds?.get === "function" ? activityWhatsAppCampaignIds.get(id) : activityWhatsAppCampaignIds?.[id];
+      if (campaignId) {
+        const campaign = await WhatsAppCampaign.findById(campaignId).lean();
+        if (campaign && campaign.stats) {
+          const hasClicked = (campaign.stats.totalClicked || 0) > 0;
+          const hasReported = (campaign.stats.totalReported || 0) > 0;
+          if (hasClicked || hasReported) {
             return res.status(400).json({
               success: false,
-              error: "You clicked a link or entered credentials in the email. To pass this activity, open the email only—do not click links or enter credentials.",
-            });
-          }
-          // Enforce 5-minute completion window from when the email was sent
-          const sentAt = emailDoc.createdAt ? new Date(emailDoc.createdAt).getTime() : 0;
-          if (sentAt && Date.now() - sentAt > ACTIVITY_TIME_LIMIT_MS) {
-            return res.status(400).json({
-              success: false,
-              error: "Activity time limit exceeded. Complete within 5 minutes of receiving the email.",
+              error: "You clicked a link or entered credentials. Do not click links or enter credentials to pass.",
             });
           }
         }
@@ -657,6 +733,8 @@ async function markComplete(req, res) {
       { $addToSet: { completed: id } },
       { new: true, upsert: true }
     ).lean();
+
+    await updateUserLmsRiskScore(userId).catch(() => {});
 
     // Check if course is now completed and generate certificate if needed
     const courseIsCompleted = await isCourseCompleted(userId, courseId);
@@ -746,6 +824,7 @@ async function unmarkComplete(req, res) {
       { $pull: { completed: id } },
       { new: true, upsert: true }
     ).lean();
+    await updateUserLmsRiskScore(userId).catch(() => {});
     return res.status(200).json({ success: true, completed: progress.completed });
   } catch (error) {
     console.error("unmarkComplete error:", error);
@@ -857,16 +936,23 @@ const ACTIVITY_WHATSAPP_TEMPLATE_TITLE = "Dropbox File Share";
 
 /**
  * POST /api/courses/:courseId/activity/send-whatsapp
- * Send the Dropbox WhatsApp template to the given phone number (training activity).
- * Body: { to: "+1234567890" or "1234567890" }
+ * Send the Dropbox WhatsApp template with click tracking. Body: { to, submoduleId }.
+ * Stores campaign id in CourseProgress.activityWhatsAppCampaignIds so we can check stats (clicked/reported) after 5 mins.
  */
 async function sendActivityWhatsApp(req, res) {
   try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
     const { courseId } = req.params;
-    const { to } = req.body || {};
+    const { to, submoduleId } = req.body || {};
 
     if (!to || typeof to !== "string" || !to.trim()) {
       return res.status(400).json({ success: false, error: "Phone number (to) is required" });
+    }
+    if (!submoduleId || typeof submoduleId !== "string" || !submoduleId.trim() || !submoduleId.endsWith("-activity")) {
+      return res.status(400).json({ success: false, error: "submoduleId (e.g. 0-activity) is required" });
     }
 
     const digitsOnly = to.trim().replace(/\D/g, "");
@@ -886,13 +972,22 @@ async function sendActivityWhatsApp(req, res) {
       });
     }
 
-    const messageBody = template.messageTemplate;
+    const landingPageUrl = (template.landingPageUrl || `${LANDING_BASE}/dropbx`).trim();
+    const clickToken = crypto.randomBytes(24).toString("hex");
+    const trackingUrl = addTrackingParam(landingPageUrl, clickToken);
+    const messageToSend = injectTrackingLink(template.messageTemplate, landingPageUrl, trackingUrl);
 
-    const result = await twilioService.sendWhatsAppMessage(to.trim(), messageBody);
+    const result = await twilioService.sendWhatsAppMessage(to.trim(), messageToSend);
 
-    const userId = req.user?._id || null;
     const orgId = req.user?.orgId?._id || req.user?.orgId || null;
-    const landingPageUrl = process.env.FRONTEND_URL || process.env.BACKEND_URL || "https://training-activity";
+    const targetUser = {
+      phoneNumber: to.trim(),
+      status: result.success ? "sent" : "failed",
+      messageSid: result.success ? result.messageId : undefined,
+      sentAt: result.success ? new Date() : undefined,
+      failureReason: result.success ? undefined : (result.error || "Send failed"),
+      clickToken: result.success ? clickToken : undefined,
+    };
     const campaign = new WhatsAppCampaign({
       name: "Training Activity",
       description: "Training module WhatsApp activity",
@@ -900,21 +995,13 @@ async function sendActivityWhatsApp(req, res) {
       createdBy: userId,
       managedByParentCampaign: false,
       templateId: "training_activity",
-      targetUsers: [
-        {
-          phoneNumber: to.trim(),
-          status: result.success ? "sent" : "failed",
-          messageSid: result.success ? result.messageId : undefined,
-          sentAt: result.success ? new Date() : undefined,
-          failureReason: result.success ? undefined : (result.error || "Send failed"),
-        },
-      ],
+      targetUsers: [targetUser],
       status: "completed",
       startDate: new Date(),
       endDate: new Date(),
-      messageTemplate: messageBody,
+      messageTemplate: template.messageTemplate,
       landingPageUrl,
-      trackingEnabled: false,
+      trackingEnabled: true,
       stats: {
         totalSent: result.success ? 1 : 0,
         totalDelivered: 0,
@@ -926,6 +1013,15 @@ async function sendActivityWhatsApp(req, res) {
     });
     await campaign.save();
 
+    if (result.success) {
+      const sid = submoduleId.trim();
+      await CourseProgress.findOneAndUpdate(
+        { user: userId, course: courseId },
+        { $set: { [`activityWhatsAppCampaignIds.${sid}`]: campaign._id } },
+        { upsert: true }
+      );
+    }
+
     if (!result.success) {
       return res.status(500).json({
         success: false,
@@ -933,10 +1029,70 @@ async function sendActivityWhatsApp(req, res) {
       });
     }
 
-    return res.status(200).json({ success: true, message: "WhatsApp message sent successfully" });
+    return res.status(200).json({
+      success: true,
+      message: "WhatsApp message sent successfully",
+      timeLimitMinutes: 5,
+    });
   } catch (error) {
     console.error("sendActivityWhatsApp error:", error);
     return res.status(500).json({ success: false, error: "Failed to send activity WhatsApp message" });
+  }
+}
+
+/**
+ * GET /api/courses/:courseId/progress/activity-whatsapp-status?submoduleId=0-activity
+ * After the 5-min timer is up: read campaign stats (totalClicked, totalReported) and target clickedAt/reportedAt from MongoDB.
+ * Pass = no click and no reported. Fail = either is set.
+ */
+async function getActivityWhatsAppStatus(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const { courseId } = req.params;
+    const submoduleId = (req.query && req.query.submoduleId) || "";
+    if (!submoduleId || !String(submoduleId).endsWith("-activity")) {
+      return res.status(400).json({ success: false, error: "submoduleId (e.g. 0-activity) is required" });
+    }
+    const id = String(submoduleId).trim();
+    const progress = await CourseProgress.findOne({ user: userId, course: courseId }).lean();
+    const campaignIds = progress?.activityWhatsAppCampaignIds;
+    const campaignId = campaignIds?.get?.(id) ?? campaignIds?.[id];
+    if (!campaignId) {
+      return res.status(200).json({
+        success: true,
+        hasCampaign: false,
+        passed: null,
+        clickedAt: null,
+        reportedAt: null,
+      });
+    }
+    const campaign = await WhatsAppCampaign.findById(campaignId).lean();
+    if (!campaign || !campaign.targetUsers || campaign.targetUsers.length === 0) {
+      return res.status(200).json({
+        success: true,
+        hasCampaign: true,
+        passed: null,
+        clickedAt: null,
+        reportedAt: null,
+      });
+    }
+    const target = campaign.targetUsers[0];
+    const hasClicked = (campaign.stats && campaign.stats.totalClicked > 0) || !!target.clickedAt;
+    const hasReported = (campaign.stats && campaign.stats.totalReported > 0) || !!target.reportedAt;
+    const passed = !hasClicked && !hasReported;
+    return res.status(200).json({
+      success: true,
+      hasCampaign: true,
+      passed,
+      clickedAt: target.clickedAt || null,
+      reportedAt: target.reportedAt || null,
+    });
+  } catch (error) {
+    console.error("getActivityWhatsAppStatus error:", error);
+    return res.status(500).json({ success: false, error: "Failed to fetch activity WhatsApp status" });
   }
 }
 
@@ -948,6 +1104,9 @@ module.exports = {
   deleteCourse,
   getProgress,
   getActivityEmailStatus,
+  getActivityWhatsAppStatus,
+  recordActivityResult,
+  activityRetry,
   markComplete,
   unmarkComplete,
   sendActivityEmail,

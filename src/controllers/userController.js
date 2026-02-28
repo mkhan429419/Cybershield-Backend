@@ -2,6 +2,8 @@ const { clerkClient } = require('@clerk/clerk-sdk-node');
 const User = require('../models/User');
 const { transformBadgesFromLabels } = require('../utils/badgeMapping');
 const { isEligibleForEmailRiskScoring, computeEmailRiskScore } = require('../services/emailRiskScoreService');
+const { isEligibleForWhatsAppRiskScoring, computeWhatsAppRiskScore } = require('../services/whatsappRiskScoreService');
+const { isEligibleForLmsRiskScoring, computeLmsRiskScore } = require('../services/lmsRiskScoreService');
 
 // GET /api/users/me
 const getUserProfile = async (req, res) => {
@@ -38,12 +40,29 @@ const getUserProfile = async (req, res) => {
       emailRiskScore = user.emailRiskScore != null ? user.emailRiskScore : 0;
     }
 
+    // WhatsApp risk score: compounded from WhatsAppRiskEvents only for affiliated / non_affiliated.
+    let whatsappRiskScore = 0;
+    if (isEligibleForWhatsAppRiskScoring(user.role)) {
+      whatsappRiskScore = await computeWhatsAppRiskScore(user._id);
+    } else {
+      whatsappRiskScore = user.whatsappRiskScore != null ? user.whatsappRiskScore : 0;
+    }
+
+    // LMS risk score: 1 - (training completed / total available). Only for affiliated / non_affiliated.
+    let lmsRiskScore = 0;
+    if (isEligibleForLmsRiskScoring(user.role)) {
+      lmsRiskScore = await computeLmsRiskScore(user._id);
+    } else {
+      lmsRiskScore = user.lmsRiskScore != null ? user.lmsRiskScore : 0;
+    }
+
     // Merge local and Clerk data
     const profile = {
       _id: user._id,
       clerkId: user.clerkId,
       email: user.email,
       displayName: user.displayName,
+      phoneNumber: user.phoneNumber != null ? user.phoneNumber : null,
       role: user.role,
       orgId: user.orgId?._id?.toString() || user.orgId?.toString() || null, // Ensure it's a string ID
       orgName: user.orgId?.name || null,
@@ -52,6 +71,8 @@ const getUserProfile = async (req, res) => {
       points: user.points,
       learningScore: user.learningScore,
       emailRiskScore,
+      whatsappRiskScore,
+      lmsRiskScore,
       badges: transformedBadges,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -108,7 +129,33 @@ const getAllUsers = async (req, res) => {
   }
 };
 
+// PATCH /api/users/me - update current user profile (e.g. phone number for WhatsApp campaigns)
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { phoneNumber } = req.body || {};
+    const updates = {};
+    if (typeof phoneNumber === "string") {
+      updates.phoneNumber = phoneNumber.trim() || null;
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update (e.g. phoneNumber)." });
+    }
+    const user = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true })
+      .select("_id email displayName phoneNumber role")
+      .lean();
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ error: "Failed to update profile." });
+  }
+};
+
 module.exports = {
   getUserProfile,
-  getAllUsers
+  getAllUsers,
+  updateProfile
 };
