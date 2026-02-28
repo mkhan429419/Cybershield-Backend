@@ -25,6 +25,7 @@ const WhatsAppCampaign = require("./models/WhatsAppCampaign");
 const EmailRiskEvent = require("./models/EmailRiskEvent");
 const User = require("./models/User");
 const { isEligibleForEmailRiskScoring, updateUserEmailRiskScore } = require("./services/emailRiskScoreService");
+const { recordWhatsAppRiskEvent } = require("./services/whatsappRiskScoreService");
 
 const app = express();
 
@@ -346,6 +347,13 @@ app.post("/track/credentials", express.json(), async (req, res) => {
         target.reportedAt = new Date();
         campaign.stats.totalReported = (campaign.stats.totalReported || 0) + 1;
         await campaign.save();
+        if (target.userId) {
+          console.log("[WhatsAppRisk] Credentials: recording risk event for target.userId", target.userId.toString());
+          await recordWhatsAppRiskEvent(target.userId, "whatsapp_credentials_submitted", campaign._id, 0.7);
+        } else {
+          console.log("[WhatsAppRisk] Credentials: target has no userId – WhatsApp risk not recorded. Phone:", target.phoneNumber);
+        }
+        console.log("WhatsApp credentials entered recorded", { campaignId: campaign._id, phoneNumber: target.phoneNumber });
         if (campaign.managedByParentCampaign) {
           await Campaign.updateOne(
             { whatsappCampaignId: campaign._id },
@@ -359,7 +367,6 @@ app.post("/track/credentials", express.json(), async (req, res) => {
             { arrayFilters: [{ "elem.phoneNumber": target.phoneNumber }] }
           );
         }
-        console.log("WhatsApp credentials entered recorded", { campaignId: campaign._id, phoneNumber: target.phoneNumber });
       }
       return res.status(200).json({ success: true, recorded: !alreadyRecorded });
     } catch (err) {

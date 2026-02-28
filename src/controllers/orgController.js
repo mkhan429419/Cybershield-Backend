@@ -386,12 +386,14 @@ const getOrgUsers = async (req, res) => {
         clerkId: user.clerkId,
         email: user.email,
         displayName: user.displayName,
+        phoneNumber: user.phoneNumber != null ? user.phoneNumber : null,
         role: user.role,
         status: user.status,
         groups: user.groupIds.map(g => g.name),
         points: user.points,
         riskScore: user.riskScore,
         emailRiskScore: user.emailRiskScore,
+        whatsappRiskScore: user.whatsappRiskScore,
         createdAt: user.createdAt
       })),
       pagination: {

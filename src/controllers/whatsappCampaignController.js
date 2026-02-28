@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const WhatsAppCampaign = require("../models/WhatsAppCampaign");
 const twilioService = require("../services/twilioService");
 const User = require("../models/User");
+const { recordWhatsAppRiskEvent } = require("../services/whatsappRiskScoreService");
 
 // Add invisible click-tracking param to URL (landing page will call backend with it, then strip from URL)
 const addTrackingParam = (url, token) => {
@@ -60,7 +61,6 @@ const createCampaign = async (req, res) => {
       messageTemplate,
       landingPageUrl,
       targetUserIds,
-      manualUsers,
       scheduleDate,
       trackingEnabled = true,
     } = req.body;
@@ -68,40 +68,49 @@ const createCampaign = async (req, res) => {
     const userId = req.user._id;
     const organizationId = req.user.orgId?._id || req.user.orgId;
 
-    let campaignTargets = [];
-    if (manualUsers && manualUsers.length > 0) {
-      campaignTargets = manualUsers.map((user) => ({
-        phoneNumber: user.phoneNumber,
-        name: `${user.firstName} ${user.lastName}`,
-        status: "pending",
-      }));
-    } else if (targetUserIds && targetUserIds.length > 0) {
-      // Get target users from database
-      const targetUsers = await User.find({
-        _id: { $in: targetUserIds },
-        orgId: organizationId,
-      }).select("_id displayName email");
-
-      if (targetUsers.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "No valid target users found. Please select users with valid phone numbers.",
-        });
-      }
-      campaignTargets = targetUsers.map((user) => ({
-        userId: user._id,
-        phoneNumber: "",
-        name: user.displayName,
-        status: "pending",
-      }));
-    }
-    if (campaignTargets.length === 0) {
+    // WhatsApp campaigns: only platform users (targetUserIds). Each must have a valid phone number for sending and risk scoring.
+    if (!targetUserIds || targetUserIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Please add at least one target user.",
+        message: "Please select at least one target user from your organization.",
       });
     }
+
+    const targetUsers = await User.find({
+      _id: { $in: targetUserIds },
+      orgId: organizationId,
+    }).select("_id displayName email phoneNumber").lean();
+
+    if (targetUsers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid target users found. Users must belong to your organization.",
+      });
+    }
+
+    const missingPhone = targetUsers.filter((u) => !u.phoneNumber || !String(u.phoneNumber).trim());
+    if (missingPhone.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `The following users have no phone number set and cannot receive WhatsApp campaigns: ${missingPhone.map((u) => u.email || u.displayName).join(", ")}. Ask them to add their phone number in Profile/Settings.`,
+      });
+    }
+
+    const validTargets = targetUsers.filter((u) => twilioService.isValidPhoneNumber(u.phoneNumber));
+    if (validTargets.length !== targetUsers.length) {
+      const invalid = targetUsers.filter((u) => !twilioService.isValidPhoneNumber(u.phoneNumber));
+      return res.status(400).json({
+        success: false,
+        message: `Invalid phone number format for: ${invalid.map((u) => u.email || u.displayName).join(", ")}. Use a valid format (e.g. +923001234567).`,
+      });
+    }
+
+    const campaignTargets = targetUsers.map((user) => ({
+      userId: user._id,
+      phoneNumber: String(user.phoneNumber).trim(),
+      name: user.displayName,
+      status: "pending",
+    }));
     const campaign = new WhatsAppCampaign({
       name,
       description,
@@ -537,6 +546,12 @@ const handleTwilioWebhook = async (req, res) => {
             target.readAt = new Date();
             campaign.stats.totalRead += 1;
             didUpdate = true;
+            if (target.userId) {
+              console.log("[WhatsAppRisk] Webhook read: recording risk event for target.userId", target.userId.toString());
+              await recordWhatsAppRiskEvent(target.userId, "whatsapp_read", campaign._id, 0.2);
+            } else {
+              console.log("[WhatsAppRisk] Webhook read: target has no userId – WhatsApp risk not recorded. Phone:", toDigits);
+            }
           }
           break;
         case "failed":
@@ -561,11 +576,14 @@ const handleTwilioWebhook = async (req, res) => {
   }
 };
 
-// Public endpoint: landing pages call this when user opens link with ?ct=TOKEN (no auth)
+// Public endpoint: landing pages call this when user opens link with ?ct=TOKEN (no auth).
+// Local testing with DEPLOYED (HTTPS) landing page: do NOT use http://localhost — browsers block
+// mixed content (HTTPS page cannot fetch HTTP). Use ngrok: run "ngrok http 5001" and set campaign
+// landing URL to e.g. https://yoursite.vercel.app/dropbx?cybershield_api=https://YOUR-NGROK-URL.ngrok-free.app
 const recordClick = async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   const token = (req.query.t || req.query.ct || "").trim();
-  console.log("[Click] Request received. Query:", { t: req.query.t, ct: req.query.ct }, "token length:", token?.length || 0, "token preview:", token ? token.substring(0, 8) + "..." : "(empty)");
+  console.log("[Click] Request received (backend hit). Query:", { t: req.query.t, ct: req.query.ct }, "token length:", token?.length || 0, "token preview:", token ? token.substring(0, 8) + "..." : "(empty)");
   if (!token) {
     console.log("[Click] No token in query – returning 204");
     return res.status(204).end();
@@ -589,6 +607,12 @@ const recordClick = async (req, res) => {
     target.clickedAt = new Date();
     campaign.stats.totalClicked += 1;
     await campaign.save();
+    if (target.userId) {
+      console.log("[WhatsAppRisk] Click: recording risk event for target.userId", target.userId.toString());
+      await recordWhatsAppRiskEvent(target.userId, "whatsapp_clicked", campaign._id, 0.5);
+    } else {
+      console.log("[WhatsAppRisk] Click: target has no userId – WhatsApp risk not recorded. Target phone:", target.phoneNumber, "| Ensure campaign was created with platform users (targetUserIds), not manual entries.");
+    }
     console.log("[Click] OK – campaign:", campaign._id, "target status -> clicked, totalClicked:", campaign.stats.totalClicked);
     res.status(204).end();
   } catch (error) {
