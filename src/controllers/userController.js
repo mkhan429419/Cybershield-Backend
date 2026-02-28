@@ -50,7 +50,7 @@ const getUserProfile = async (req, res) => {
       groupIds: user.groupIds,
       status: user.status,
       points: user.points,
-      riskScore: user.riskScore,
+      learningScore: user.learningScore,
       emailRiskScore,
       badges: transformedBadges,
       createdAt: user.createdAt,
@@ -80,7 +80,7 @@ const getAllUsers = async (req, res) => {
     }
 
     const users = await User.find(query)
-      .select('_id email displayName role status')
+      .select('_id email displayName role status learningScore')
       .sort({ email: 1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -93,7 +93,8 @@ const getAllUsers = async (req, res) => {
         email: user.email,
         displayName: user.displayName,
         role: user.role,
-        status: user.status
+        status: user.status,
+        learningScore: user.learningScore || 0
       })),
       pagination: {
         current: parseInt(page),

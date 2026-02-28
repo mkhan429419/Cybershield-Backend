@@ -7,12 +7,16 @@ const {
   createTemplate,
   updateTemplate,
   deleteTemplate,
+  getDefaultScenarios,
 } = require("../controllers/voicePhishingTemplateController");
 
 // All routes require authentication and admin role
 router.use(requireAuth);
 router.use(getUserData);
 router.use(requireRole(["system_admin", "client_admin"]));
+
+// Get default scenarios (available to add as templates)
+router.get("/defaults", getDefaultScenarios);
 
 // Get all templates
 router.get("/", getTemplates);

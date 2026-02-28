@@ -390,7 +390,7 @@ const getOrgUsers = async (req, res) => {
         status: user.status,
         groups: user.groupIds.map(g => g.name),
         points: user.points,
-        riskScore: user.riskScore,
+        learningScore: user.learningScore,
         emailRiskScore: user.emailRiskScore,
         createdAt: user.createdAt
       })),

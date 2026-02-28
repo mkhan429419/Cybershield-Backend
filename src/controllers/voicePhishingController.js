@@ -173,60 +173,39 @@ async function getRandomScenario(user) {
     });
   } catch (error) {
     console.error("❌ [Scenario Selection] Error fetching templates:", error);
-    // Continue with default scenarios if template fetch fails
+    // Continue without templates if fetch fails
   }
   
-  // Combine templates with default scenarios
-  let availableScenarios = [];
-  const defaultScenariosCount = scenarioType === "phishing" ? PHISHING_SCENARIOS.length : NORMAL_SCENARIOS.length;
+  // Convert templates to scenario format
+  const availableScenarios = templates.map((template) => ({
+    type: template.type,
+    description: template.description,
+    firstMessage: template.firstMessage,
+    isTemplate: true, // Flag to identify template scenarios
+    templateId: template._id.toString(),
+  }));
   
-  if (scenarioType === "phishing") {
-    // Add default phishing scenarios
-    availableScenarios = [...PHISHING_SCENARIOS];
-  } else {
-    // Add default normal scenarios
-    availableScenarios = [...NORMAL_SCENARIOS];
-  }
-  
-  console.log("📖 [Scenario Selection] Default scenarios:", {
-    type: scenarioType,
-    count: defaultScenariosCount,
-    descriptions: availableScenarios.map(s => s.description),
-  });
-  
-  // Add templates to available scenarios
-  templates.forEach((template) => {
-    availableScenarios.push({
-      type: template.type,
-      description: template.description,
-      firstMessage: template.firstMessage,
-      isTemplate: true, // Flag to identify template scenarios
-      templateId: template._id.toString(),
-    });
-  });
-  
-  console.log("🔀 [Scenario Selection] Combined scenario pool:", {
+  console.log("🔀 [Scenario Selection] Available scenario pool:", {
     totalScenarios: availableScenarios.length,
-    defaultScenarios: defaultScenariosCount,
     templateScenarios: templates.length,
     allDescriptions: availableScenarios.map(s => ({
       description: s.description,
-      source: s.isTemplate ? "template" : "default",
-      templateId: s.templateId || "N/A",
+      source: "template",
+      templateId: s.templateId,
     })),
   });
   
-  // Select random scenario from combined list
+  // Select random scenario from templates
   if (availableScenarios.length === 0) {
-    console.warn("⚠️ [Scenario Selection] No scenarios available, using fallback");
-    // Fallback to default scenarios if no templates found
+    console.warn("⚠️ [Scenario Selection] No templates available, using fallback default scenario");
+    // Fallback to default scenarios only if no templates exist
     if (scenarioType === "phishing") {
       const fallbackScenario = PHISHING_SCENARIOS[Math.floor(Math.random() * PHISHING_SCENARIOS.length)];
       console.log("✅ [Scenario Selection] Selected fallback scenario:", {
         type: fallbackScenario.type,
         description: fallbackScenario.description,
         firstMessage: fallbackScenario.firstMessage?.substring(0, 100) + "...",
-        source: "default (fallback)",
+        source: "default (fallback - no templates available)",
       });
       return fallbackScenario;
     } else {
@@ -235,7 +214,7 @@ async function getRandomScenario(user) {
         type: fallbackScenario.type,
         description: fallbackScenario.description,
         firstMessage: fallbackScenario.firstMessage?.substring(0, 100) + "...",
-        source: "default (fallback)",
+        source: "default (fallback - no templates available)",
       });
       return fallbackScenario;
     }
@@ -249,8 +228,8 @@ async function getRandomScenario(user) {
     type: selectedScenario.type,
     description: selectedScenario.description,
     firstMessage: selectedScenario.firstMessage?.substring(0, 100) + (selectedScenario.firstMessage?.length > 100 ? "..." : ""),
-    source: selectedScenario.isTemplate ? "template" : "default",
-    templateId: selectedScenario.templateId || "N/A",
+    source: "template",
+    templateId: selectedScenario.templateId,
     totalPoolSize: availableScenarios.length,
   });
   
@@ -862,10 +841,10 @@ const endConversation = async (req, res) => {
     // Update user's risk score based on performance
     const user = await User.findById(userId);
     if (user) {
-      // Simple risk score update (can be enhanced)
+      // Simple learning score update (can be enhanced)
       // Lower score = higher risk
       const riskAdjustment = analysis.analysis.score < 50 ? 10 : analysis.analysis.score < 75 ? 5 : -5;
-      user.riskScore = Math.max(0, Math.min(100, (user.riskScore || 0) + riskAdjustment));
+      user.learningScore = Math.max(0, Math.min(100, (user.learningScore || 0) + riskAdjustment));
       
       // Update points based on performance
       const pointsEarned = Math.floor(analysis.analysis.score / 10);
@@ -1069,5 +1048,7 @@ module.exports = {
   getConversations,
   getConversation,
   getConversationAnalytics,
+  PHISHING_SCENARIOS,
+  NORMAL_SCENARIOS,
 };
 

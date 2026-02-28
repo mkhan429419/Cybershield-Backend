@@ -1,5 +1,6 @@
 const VoicePhishingTemplate = require("../models/VoicePhishingTemplate");
 const User = require("../models/User");
+const { PHISHING_SCENARIOS, NORMAL_SCENARIOS } = require("./voicePhishingController");
 
 /**
  * Get templates based on user role and organization
@@ -326,10 +327,63 @@ const deleteTemplate = async (req, res) => {
   }
 };
 
+/**
+ * Get default scenarios (hard-coded scenarios from voicePhishingController)
+ * These are the base scenarios that admins can add to their templates
+ */
+const getDefaultScenarios = async (req, res) => {
+  try {
+    // Combine phishing and normal scenarios
+    const allDefaultScenarios = [
+      ...PHISHING_SCENARIOS.map((scenario, index) => {
+        // Extract title from description (format: "Title - Description")
+        const parts = scenario.description.split(" - ");
+        const title = parts.length > 1 ? parts[0] : scenario.description.substring(0, 50);
+        
+        return {
+          id: `phishing-${index}`,
+          title: title,
+          description: scenario.description,
+          type: scenario.type,
+          firstMessage: scenario.firstMessage,
+          isDefault: true,
+        };
+      }),
+      ...NORMAL_SCENARIOS.map((scenario, index) => {
+        // Extract title from description (format: "Title - Description")
+        const parts = scenario.description.split(" - ");
+        const title = parts.length > 1 ? parts[0] : scenario.description.substring(0, 50);
+        
+        return {
+          id: `normal-${index}`,
+          title: title,
+          description: scenario.description,
+          type: scenario.type,
+          firstMessage: scenario.firstMessage,
+          isDefault: true,
+        };
+      }),
+    ];
+
+    res.json({
+      success: true,
+      data: allDefaultScenarios,
+    });
+  } catch (error) {
+    console.error("Get Default Scenarios Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch default scenarios",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getTemplates,
   getTemplate,
   createTemplate,
   updateTemplate,
   deleteTemplate,
+  getDefaultScenarios,
 };

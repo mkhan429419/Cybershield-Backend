@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  riskScore: {
+  learningScore: {
     type: Number,
     default: 0
   },
