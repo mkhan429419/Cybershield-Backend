@@ -990,31 +990,45 @@ const getConversationAnalytics = async (req, res) => {
     if (userRole === "client_admin" && organizationId) {
       query.organizationId = organizationId;
     }
-    // System admins can see all data (no filter)
+    // System admins: filter for non-affiliated users only (users with orgId = null)
+    if (userRole === "system_admin") {
+      query.organizationId = null;
+    }
 
-    const conversations = await VoicePhishingConversation.find(query);
+    const conversations = await VoicePhishingConversation.find(query)
+      .populate("userId", "role");
+    
+    // For system admin, also filter by user role to ensure only non_affiliated
+    let filteredConversations = conversations;
+    if (userRole === "system_admin") {
+      filteredConversations = conversations.filter(
+        (c) => c.userId && c.userId.role === "non_affiliated"
+      );
+    } else {
+      filteredConversations = conversations;
+    }
 
     const analytics = {
-      totalConversations: conversations.length,
-      completedConversations: conversations.filter((c) => c.status === "completed").length,
+      totalConversations: filteredConversations.length,
+      completedConversations: filteredConversations.filter((c) => c.status === "completed").length,
       averageScore: 0,
       phishingScenarios: {
-        total: conversations.filter((c) => c.scenarioType === "phishing").length,
-        fellForPhishing: conversations.filter(
+        total: filteredConversations.filter((c) => c.scenarioType === "phishing").length,
+        fellForPhishing: filteredConversations.filter(
           (c) => c.scenarioType === "phishing" && c.scoreDetails?.fellForPhishing
         ).length,
       },
       normalScenarios: {
-        total: conversations.filter((c) => c.scenarioType === "normal").length,
+        total: filteredConversations.filter((c) => c.scenarioType === "normal").length,
       },
       resistanceLevels: {
-        high: conversations.filter((c) => c.scoreDetails?.resistanceLevel === "high").length,
-        medium: conversations.filter((c) => c.scoreDetails?.resistanceLevel === "medium").length,
-        low: conversations.filter((c) => c.scoreDetails?.resistanceLevel === "low").length,
+        high: filteredConversations.filter((c) => c.scoreDetails?.resistanceLevel === "high").length,
+        medium: filteredConversations.filter((c) => c.scoreDetails?.resistanceLevel === "medium").length,
+        low: filteredConversations.filter((c) => c.scoreDetails?.resistanceLevel === "low").length,
       },
     };
 
-    const completedWithScores = conversations.filter(
+    const completedWithScores = filteredConversations.filter(
       (c) => c.status === "completed" && c.score !== null
     );
     if (completedWithScores.length > 0) {

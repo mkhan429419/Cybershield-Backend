@@ -144,8 +144,23 @@ const getCampaigns = async (req, res) => {
     const { page = 1, limit = 10, status } = req.query;
     // Handle both populated and non-populated orgId (auth middleware populates orgId)
     const organizationId = req.user.orgId?._id || req.user.orgId;
+    const userRole = req.user.role;
 
-    const query = organizationId ? { organizationId } : {};
+    let query = {};
+    
+    // Client admins: only their org's campaigns
+    if (userRole === "client_admin" && organizationId) {
+      query.organizationId = organizationId;
+    }
+    // System admins: only campaigns for non-affiliated users (orgId = null)
+    else if (userRole === "system_admin") {
+      query.organizationId = null;
+    }
+    // Other roles: their org's campaigns
+    else if (organizationId) {
+      query.organizationId = organizationId;
+    }
+    
     if (status) {
       query.status = status;
     }

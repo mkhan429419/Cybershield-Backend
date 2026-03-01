@@ -230,6 +230,47 @@ async function getCertificateByCourse(req, res) {
   }
 }
 
+/**
+ * GET /api/certificates/count/non-affiliated
+ * Get total certificate count for non-affiliated users (system admin only)
+ */
+async function getNonAffiliatedCertificateCount(req, res) {
+  try {
+    const userRole = req.user.role;
+
+    // Only system admin can access this endpoint
+    if (userRole !== "system_admin") {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. System admin only.",
+      });
+    }
+
+    // Get all non-affiliated users (excluding admins)
+    const users = await User.find({
+      role: "non_affiliated",
+    }).select("_id").lean();
+
+    const userIds = users.map((u) => u._id);
+
+    // Count certificates for these users
+    const totalCertificates = await Certificate.countDocuments({
+      user: { $in: userIds },
+    });
+
+    return res.status(200).json({
+      success: true,
+      totalCertificates,
+    });
+  } catch (error) {
+    console.error("Error fetching non-affiliated certificate count:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch certificate count",
+    });
+  }
+}
+
 module.exports = {
   generateCertificate,
   getUserCertificates,
@@ -237,4 +278,5 @@ module.exports = {
   getCertificateByCourse,
   isCourseCompleted,
   generateCertificateNumber,
+  getNonAffiliatedCertificateCount,
 };

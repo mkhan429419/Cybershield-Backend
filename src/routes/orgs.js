@@ -5,7 +5,8 @@ const {
   bulkInviteUsers, 
   inviteSingleUser, 
   getInviteStatus, 
-  getOrgUsers 
+  getOrgUsers,
+  getOrgCertificateCount
 } = require('../controllers/orgController');
 
 const router = express.Router();
@@ -40,5 +41,8 @@ router.get('/:orgId/invites', requireOrgAccess, getInviteStatus);
 
 // GET /api/orgs/:orgId/users
 router.get('/:orgId/users', requireOrgAccess, getOrgUsers);
+
+// GET /api/orgs/:orgId/certificates/count
+router.get('/:orgId/certificates/count', requireOrgAccess, getOrgCertificateCount);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const { clerkClient } = require('@clerk/clerk-sdk-node');
 const User = require('../models/User');
 const Group = require('../models/Group');
+const Certificate = require('../models/Certificate');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
 const { isEligibleForEmailRiskScoring, computeEmailRiskScore } = require('../services/emailRiskScoreService');
@@ -410,6 +411,7 @@ const getOrgUsers = async (req, res) => {
           lms: user.learningScoreLms != null ? user.learningScoreLms : 0,
           voice: user.learningScoreVoice != null ? user.learningScoreVoice : 0
         },
+        badges: Array.isArray(user.badges) ? user.badges : [],
         createdAt: user.createdAt
       };
     }));
@@ -442,9 +444,52 @@ const parseCSV = (buffer) => {
   });
 };
 
+// GET /api/orgs/:orgId/certificates/count
+// Get total certificate count for an organization (excluding admin users)
+const getOrgCertificateCount = async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const userRole = req.user.role;
+    const userOrgId = req.user.orgId?._id || req.user.orgId;
+
+    // Client admins can only see their org's data
+    if (userRole === "client_admin" && userOrgId && userOrgId.toString() !== orgId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: "Access denied" 
+      });
+    }
+
+    // Get all users in the organization (excluding admins)
+    const users = await User.find({ 
+      orgId,
+      role: { $nin: ["client_admin", "system_admin"] }
+    }).select("_id").lean();
+
+    const userIds = users.map(u => u._id);
+
+    // Count certificates for these users
+    const totalCertificates = await Certificate.countDocuments({
+      user: { $in: userIds }
+    });
+
+    return res.status(200).json({
+      success: true,
+      totalCertificates,
+    });
+  } catch (error) {
+    console.error('Error fetching org certificate count:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch certificate count' 
+    });
+  }
+};
+
 module.exports = {
   bulkInviteUsers,
   inviteSingleUser,
   getInviteStatus,
-  getOrgUsers
+  getOrgUsers,
+  getOrgCertificateCount
 };
