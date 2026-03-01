@@ -1,6 +1,7 @@
 const whatsappEmailMlService = require("../services/whatsappEmailMlService");
 const fusionMlService = require("../services/fusionMlService");
 const Incident = require("../models/Incident");
+const { updateIncidentLearningScore } = require("../services/incidentLearningScoreService");
 
 // Use fusion model by default, can be overridden with USE_FUSION_MODEL=false
 const USE_FUSION_MODEL = process.env.USE_FUSION_MODEL !== 'false';
@@ -76,6 +77,15 @@ async function analyzeIncident(req, res) {
     } catch (saveError) {
       console.error("Error saving incident to MongoDB:", saveError);
       // Continue with response even if save fails - don't break the user experience
+    }
+
+    // Update user's incident learning score (correct reports ↑, false reports ↓) and recalc overall learning score
+    if (userId) {
+      try {
+        await updateIncidentLearningScore(userId);
+      } catch (err) {
+        console.error("Incident learning score update failed:", err.message);
+      }
     }
 
     return res.status(200).json({

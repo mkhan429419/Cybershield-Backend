@@ -59,11 +59,13 @@ const getUserProfile = async (req, res) => {
     }
 
     const voiceScore = user.learningScoreVoice != null ? user.learningScoreVoice : 0;
+    const incidentScore = user.learningScoreIncident != null ? user.learningScoreIncident : 0;
     const learningScores = {
       email: Math.round(emailScore * 100) / 100,
       whatsapp: Math.round(whatsappScore * 100) / 100,
       lms: Math.round(lmsScore * 100) / 100,
-      voice: Math.round((voiceScore ?? 0) * 100) / 100
+      voice: Math.round((voiceScore ?? 0) * 100) / 100,
+      incident: Math.round((incidentScore ?? 0) * 100) / 100
     };
 
     // Merge local and Clerk data
@@ -102,6 +104,7 @@ const getUserProfile = async (req, res) => {
               learningScoreWhatsapp: whatsappScore,
               learningScoreLms: lmsScore,
               learningScoreVoice: voiceScore,
+              learningScoreIncident: incidentScore,
             },
           }
         );
@@ -110,6 +113,7 @@ const getUserProfile = async (req, res) => {
           whatsapp: whatsappScore,
           lms: lmsScore,
           voice: voiceScore,
+          incident: incidentScore,
         });
         await ensureRemedialAssignments(user._id);
         profile.learningScore = computeCombinedLearningScore({
@@ -117,6 +121,7 @@ const getUserProfile = async (req, res) => {
           whatsapp: whatsappScore,
           lms: lmsScore,
           voice: voiceScore,
+          incident: incidentScore,
         });
       }
       const remedialAssignments = await getRemedialAssignmentsForUser(user._id);
@@ -144,7 +149,7 @@ const getAllUsers = async (req, res) => {
     }
 
     const users = await User.find(query)
-      .select('_id email displayName role status learningScore learningScoreEmail learningScoreWhatsapp learningScoreLms learningScoreVoice badges')
+      .select('_id email displayName role status learningScore learningScoreEmail learningScoreWhatsapp learningScoreLms learningScoreVoice learningScoreIncident badges')
       .sort({ email: 1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -177,7 +182,8 @@ const getAllUsers = async (req, res) => {
           email: Math.round(emailScore * 100) / 100,
           whatsapp: Math.round(whatsappScore * 100) / 100,
           lms: user.learningScoreLms != null ? user.learningScoreLms : 0,
-          voice: user.learningScoreVoice != null ? user.learningScoreVoice : 0
+          voice: user.learningScoreVoice != null ? user.learningScoreVoice : 0,
+          incident: user.learningScoreIncident != null ? user.learningScoreIncident : 0
         },
         badges: Array.isArray(user.badges) ? user.badges : []
       };
