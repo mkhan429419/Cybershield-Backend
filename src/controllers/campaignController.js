@@ -739,7 +739,7 @@ const getCampaignAnalytics = async (req, res) => {
       startDate: campaign.startDate,
       endDate: campaign.endDate,
       
-      // Email analytics (no delivered metric; report rate omitted for combined campaign analytics)
+      // Email analytics (report rate omitted for combined campaign analytics)
       email: {
         enabled: campaign.emailConfig.enabled,
         totalTargets: campaign.stats.totalEmailTargets,
