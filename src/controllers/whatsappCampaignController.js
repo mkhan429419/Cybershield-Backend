@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const WhatsAppCampaign = require("../models/WhatsAppCampaign");
+const Campaign = require("../models/Campaign");
 const twilioService = require("../services/twilioService");
 const User = require("../models/User");
 const { recordWhatsAppRiskEvent } = require("../services/whatsappRiskScoreService");
@@ -526,7 +527,7 @@ const handleTwilioWebhook = async (req, res) => {
     }
 
     if (!campaign || !target) {
-      console.log("[Twilio Webhook] No matching campaign/target for MessageSid:", MessageSid, "To digits:", toDigits);
+      console.log("[Twilio Webhook] No matching campaign/target for MessageSid:", MessageSid, "To:", To, "digits:", toDigits, "- ensure messageSid was stored when sending (e.g. combined campaign now stores it)");
     } else {
       const matchType = target.messageSid ? "MessageSid" : "phone";
       console.log("[Twilio Webhook] Matched campaign:", campaign._id, "by", matchType, "target phone:", toDigits, "current status:", target.status, "updating to:", MessageStatus);
@@ -566,6 +567,37 @@ const handleTwilioWebhook = async (req, res) => {
       if (didUpdate) {
         await campaign.save();
         console.log("[Twilio Webhook] Saved. Stats now - delivered:", campaign.stats.totalDelivered, "read:", campaign.stats.totalRead);
+        // Sync to parent Campaign when this WhatsApp campaign is managed by campaign page (combined email+whatsapp)
+        if (campaign.managedByParentCampaign) {
+          const updatePayload = {};
+          if (MessageStatus === "delivered") {
+            updatePayload.$inc = { "stats.totalWhatsappDelivered": 1 };
+            updatePayload.$set = {
+              "targetUsers.$[elem].whatsappStatus": "delivered",
+              "targetUsers.$[elem].whatsappDeliveredAt": target.deliveredAt,
+            };
+          } else if (MessageStatus === "read") {
+            updatePayload.$inc = { "stats.totalWhatsappRead": 1 };
+            updatePayload.$set = {
+              "targetUsers.$[elem].whatsappStatus": "read",
+              "targetUsers.$[elem].whatsappReadAt": target.readAt,
+            };
+          } else if (MessageStatus === "failed") {
+            updatePayload.$inc = { "stats.totalWhatsappFailed": 1 };
+            updatePayload.$set = {
+              "targetUsers.$[elem].whatsappStatus": "failed",
+              "targetUsers.$[elem].whatsappFailureReason": target.failureReason || body.ErrorMessage || "",
+            };
+          }
+          if (Object.keys(updatePayload).length) {
+            const parentResult = await Campaign.updateOne(
+              { whatsappCampaignId: campaign._id },
+              updatePayload,
+              { arrayFilters: [{ "elem.phoneNumber": target.phoneNumber }] }
+            );
+            console.log("[Twilio Webhook] Parent campaign sync (combined): status=", MessageStatus, "| matched:", parentResult.modifiedCount, "| phone:", target.phoneNumber);
+          }
+        }
       }
     }
 
@@ -583,7 +615,7 @@ const handleTwilioWebhook = async (req, res) => {
 const recordClick = async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   const token = (req.query.t || req.query.ct || "").trim();
-  console.log("[Click] Request received (backend hit). Query:", { t: req.query.t, ct: req.query.ct }, "token length:", token?.length || 0, "token preview:", token ? token.substring(0, 8) + "..." : "(empty)");
+  console.log("[Click] Request received. Query:", { t: req.query.t, ct: req.query.ct }, "token length:", token?.length || 0, "token preview:", token ? token.substring(0, 8) + "..." : "(empty)");
   if (!token) {
     console.log("[Click] No token in query – returning 204");
     return res.status(204).end();
@@ -591,9 +623,10 @@ const recordClick = async (req, res) => {
   try {
     const campaign = await WhatsAppCampaign.findOne({ "targetUsers.clickToken": token });
     if (!campaign) {
-      console.log("[Click] No campaign found with clickToken:", token.substring(0, 8) + "... (check that this token exists on a targetUsers.clickToken)");
+      console.log("[Click] No campaign found with clickToken:", token.substring(0, 8) + "... (link must contain ?ct=TOKEN; combined campaigns now inject this when sending)");
       return res.status(204).end();
     }
+    console.log("[Click] Campaign found:", campaign._id, "| managedByParentCampaign:", !!campaign.managedByParentCampaign);
     const target = campaign.targetUsers.find((t) => t.clickToken === token);
     if (!target) {
       console.log("[Click] Campaign", campaign._id, "found but no target with this clickToken – returning 204");
@@ -607,6 +640,20 @@ const recordClick = async (req, res) => {
     target.clickedAt = new Date();
     campaign.stats.totalClicked += 1;
     await campaign.save();
+    if (campaign.managedByParentCampaign) {
+      const parentResult = await Campaign.updateOne(
+        { whatsappCampaignId: campaign._id },
+        {
+          $inc: { "stats.totalWhatsappClicked": 1 },
+          $set: {
+            "targetUsers.$[elem].whatsappStatus": "clicked",
+            "targetUsers.$[elem].whatsappClickedAt": target.clickedAt,
+          },
+        },
+        { arrayFilters: [{ "elem.phoneNumber": target.phoneNumber }] }
+      );
+      console.log("[Click] Parent campaign sync (combined): matched:", parentResult.modifiedCount, "| campaignId:", campaign._id, "| phone:", target.phoneNumber);
+    }
     if (target.userId) {
       console.log("[WhatsAppRisk] Click: recording risk event for target.userId", target.userId.toString());
       await recordWhatsAppRiskEvent(target.userId, "whatsapp_clicked", campaign._id, 0.5);

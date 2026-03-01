@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const Campaign = require("../models/Campaign");
 const EmailTemplate = require("../models/EmailTemplate");
 const User = require("../models/User");
@@ -6,6 +7,25 @@ const Email = require("../models/Email");
 const twilioService = require("../services/twilioService");
 const nodemailerService = require("../services/nodemailerService");
 const { formatEmailForSending } = require("../services/emailFormatter");
+
+// Click tracking for combined campaign WhatsApp (same logic as whatsappCampaignController.sendCampaignMessages)
+const addTrackingParam = (url, token) => {
+  if (!url || !token) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set("ct", token);
+    return u.toString();
+  } catch {
+    return url + (url.includes("?") ? "&" : "?") + "ct=" + encodeURIComponent(token);
+  }
+};
+const escapeForRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const injectTrackingLink = (messageTemplate, landingPageUrl, trackingUrl) => {
+  if (!messageTemplate || !landingPageUrl || !trackingUrl) return messageTemplate;
+  const normalized = (landingPageUrl || "").trim();
+  if (!normalized) return messageTemplate;
+  return messageTemplate.replace(new RegExp(escapeForRegex(normalized), "gi"), trackingUrl);
+};
 
 // Campaign scheduler - checks every minute for scheduled campaigns
 const startCampaignScheduler = () => {
@@ -123,11 +143,11 @@ const createCampaign = async (req, res) => {
         return target;
       });
     } else if (targetUserIds && targetUserIds.length > 0) {
-      // Get users from database
+      // Get users from database (include phoneNumber for WhatsApp campaigns)
       const targetUsers = await User.find({
         _id: { $in: targetUserIds },
         orgId: organizationId,
-      }).select("_id displayName email");
+      }).select("_id displayName email phoneNumber").lean();
 
       if (targetUsers.length === 0) {
         return res.status(400).json({
@@ -136,11 +156,21 @@ const createCampaign = async (req, res) => {
         });
       }
 
+      if (whatsappConfig?.enabled) {
+        const withPhone = targetUsers.filter((u) => u.phoneNumber && String(u.phoneNumber).trim());
+        if (withPhone.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: "At least one target user must have a phone number set for WhatsApp. Ask users to add their phone in Profile/Settings.",
+          });
+        }
+      }
+
       campaignTargets = targetUsers.map((user) => {
         const target = {
           userId: user._id,
           email: user.email || "",
-          phoneNumber: "", // Would need to be added to User model or provided separately
+          phoneNumber: (user.phoneNumber && String(user.phoneNumber).trim()) || "",
           name: user.displayName,
         };
         
@@ -218,34 +248,6 @@ const createCampaign = async (req, res) => {
     });
 
     await campaign.save();
-
-    // Create WhatsAppCampaign if WhatsApp is enabled
-    if (whatsappConfig?.enabled) {
-      const whatsappCampaign = new WhatsAppCampaign({
-        name: `${name} - WhatsApp`,
-        description,
-        organizationId,
-        createdBy: userId,
-        templateId: whatsappConfig.templateId || "manual_template",
-        targetUsers: campaignTargets
-          .filter(t => t.phoneNumber && t.whatsappStatus === "pending")
-          .map(t => ({
-            userId: t.userId,
-            phoneNumber: t.phoneNumber,
-            name: t.name,
-            status: "pending",
-          })),
-        messageTemplate: whatsappConfig.messageTemplate,
-        landingPageUrl: whatsappConfig.landingPageUrl,
-        trackingEnabled: settings?.trackingEnabled !== false,
-        scheduleDate: scheduleDate ? new Date(scheduleDate) : null,
-        status: scheduleDate ? "scheduled" : "draft",
-      });
-      
-      await whatsappCampaign.save();
-      campaign.whatsappCampaignId = whatsappCampaign._id;
-      await campaign.save();
-    }
 
     res.status(201).json({
       success: true,
@@ -737,7 +739,7 @@ const getCampaignAnalytics = async (req, res) => {
       startDate: campaign.startDate,
       endDate: campaign.endDate,
       
-      // Email analytics
+      // Email analytics (report rate omitted for combined campaign analytics)
       email: {
         enabled: campaign.emailConfig.enabled,
         totalTargets: campaign.stats.totalEmailTargets,
@@ -756,12 +758,9 @@ const getCampaignAnalytics = async (req, res) => {
         clickRate: campaign.stats.totalEmailSent > 0
           ? ((campaign.stats.totalEmailClicked / campaign.stats.totalEmailSent) * 100).toFixed(2)
           : 0,
-        reportRate: campaign.stats.totalEmailSent > 0
-          ? ((campaign.stats.totalEmailReported / campaign.stats.totalEmailSent) * 100).toFixed(2)
-          : 0,
       },
       
-      // WhatsApp analytics
+      // WhatsApp analytics (report rate omitted for combined campaign analytics)
       whatsapp: {
         enabled: campaign.whatsappConfig.enabled,
         totalTargets: campaign.stats.totalWhatsappTargets,
@@ -779,9 +778,6 @@ const getCampaignAnalytics = async (req, res) => {
           : 0,
         clickRate: campaign.stats.totalWhatsappSent > 0
           ? ((campaign.stats.totalWhatsappClicked / campaign.stats.totalWhatsappSent) * 100).toFixed(2)
-          : 0,
-        reportRate: campaign.stats.totalWhatsappSent > 0
-          ? ((campaign.stats.totalWhatsappReported / campaign.stats.totalWhatsappSent) * 100).toFixed(2)
           : 0,
       },
     };
@@ -864,69 +860,81 @@ const executeWhatsAppCampaign = async (whatsappCampaign, parentCampaign) => {
       (target) => target.status === "pending"
     );
 
+    const messageTemplate = whatsappCampaign.messageTemplate;
+    const landingPageUrl = (whatsappCampaign.landingPageUrl || "").trim();
+    const trackingEnabled = whatsappCampaign.trackingEnabled !== false && landingPageUrl;
+    console.log("[Combined Campaign WhatsApp] Executing for parent:", parentCampaign.name, "| targets:", pendingTargets.length, "| trackingEnabled:", trackingEnabled, "| landingPageUrl:", landingPageUrl ? landingPageUrl.substring(0, 60) + "..." : "(empty)");
+
     for (const target of pendingTargets) {
       try {
         if (!twilioService.isValidPhoneNumber(target.phoneNumber)) {
           target.status = "failed";
           target.failureReason = "Invalid phone number";
           whatsappCampaign.stats.totalFailed += 1;
-          
-          // Update parent campaign
-          const parentTarget = parentCampaign.targetUsers.find(
-            t => t.phoneNumber === target.phoneNumber
-          );
+          const parentTarget = parentCampaign.targetUsers.find((t) => t.phoneNumber === target.phoneNumber);
           if (parentTarget) {
             parentTarget.whatsappStatus = "failed";
             parentTarget.whatsappFailureReason = "Invalid phone number";
             parentCampaign.stats.totalWhatsappFailed += 1;
           }
+          console.log("[Combined Campaign WhatsApp] Target invalid phone:", target.phoneNumber);
         } else {
+          let messageToSend = messageTemplate;
+          let clickToken = null;
+          if (trackingEnabled) {
+            clickToken = crypto.randomBytes(24).toString("hex");
+            const trackingUrl = addTrackingParam(landingPageUrl, clickToken);
+            messageToSend = injectTrackingLink(messageTemplate, landingPageUrl, trackingUrl);
+            const wasReplaced = messageToSend !== messageTemplate;
+            console.log("[Combined Campaign WhatsApp] Click tracking for", target.phoneNumber, "| token:", clickToken.substring(0, 8) + "...", "| linkReplaced:", wasReplaced);
+          } else {
+            console.log("[Combined Campaign WhatsApp] No tracking (missing landingPageUrl or tracking disabled) for", target.phoneNumber);
+          }
+
           const result = await twilioService.sendWhatsAppMessage(
             target.phoneNumber,
-            whatsappCampaign.messageTemplate
+            messageToSend
           );
 
           if (result.success) {
             target.status = "sent";
             target.sentAt = new Date();
+            if (result.messageId) target.messageSid = result.messageId;
+            if (clickToken) target.clickToken = clickToken;
             whatsappCampaign.stats.totalSent += 1;
-            
-            // Update parent campaign
-            const parentTarget = parentCampaign.targetUsers.find(
-              t => t.phoneNumber === target.phoneNumber
-            );
+
+            const parentTarget = parentCampaign.targetUsers.find((t) => t.phoneNumber === target.phoneNumber);
             if (parentTarget) {
               parentTarget.whatsappStatus = "sent";
               parentTarget.whatsappSentAt = new Date();
               parentCampaign.stats.totalWhatsappSent += 1;
             }
+            console.log("[Combined Campaign WhatsApp] Sent to", target.phoneNumber, "| messageSid:", target.messageSid ? target.messageSid.substring(0, 12) + "..." : "(none)", "| clickToken:", clickToken ? "yes" : "no");
           } else {
             target.status = "failed";
             target.failureReason = result.error;
             whatsappCampaign.stats.totalFailed += 1;
-            
-            // Update parent campaign
-            const parentTarget = parentCampaign.targetUsers.find(
-              t => t.phoneNumber === target.phoneNumber
-            );
+            const parentTarget = parentCampaign.targetUsers.find((t) => t.phoneNumber === target.phoneNumber);
             if (parentTarget) {
               parentTarget.whatsappStatus = "failed";
               parentTarget.whatsappFailureReason = result.error;
               parentCampaign.stats.totalWhatsappFailed += 1;
             }
+            console.log("[Combined Campaign WhatsApp] Send failed for", target.phoneNumber, "| error:", result.error);
           }
         }
-        
+
         await whatsappCampaign.save();
         await parentCampaign.save();
-        
-        // Delay between messages
+
         await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (error) {
-        console.error(`WhatsApp send failed for ${target.phoneNumber}:`, error);
+        console.error("[Combined Campaign WhatsApp] Send exception for", target.phoneNumber, ":", error.message);
         target.status = "failed";
         target.failureReason = error.message;
         whatsappCampaign.stats.totalFailed += 1;
+        await whatsappCampaign.save();
+        await parentCampaign.save();
       }
     }
     
