@@ -20,6 +20,7 @@ const courseRoutes = require("./routes/courses");
 const certificateRoutes = require("./routes/certificates");
 const reportRoutes = require("./routes/reports");
 const uploadRoutes = require("./routes/upload");
+const leaderboardRoutes = require("./routes/leaderboard");
 const Email = require("./models/Email");
 const Campaign = require("./models/Campaign");
 const WhatsAppCampaign = require("./models/WhatsAppCampaign");
@@ -399,6 +400,7 @@ app.use("/api/courses", courseRoutes);
 app.use("/api/certificates", certificateRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/leaderboard", leaderboardRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -92,5 +92,6 @@ module.exports = {
   computeLmsRiskScore,
   updateUserLmsRiskScore,
   getTotalSubmodulesForCourse,
+  getCourseFilterForUser,
   ELIGIBLE_ROLES,
 };
