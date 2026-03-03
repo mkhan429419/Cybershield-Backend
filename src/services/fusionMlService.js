@@ -1,22 +1,26 @@
 /**
  * Fusion ML Service
  * Uses the unified model fusion system that combines Email, WhatsApp, and Voice models.
- * Supports multiple fusion strategies including stacked_fusion (meta-learner).
+ * Prefers a long-lived Python worker (models loaded once); falls back to spawn-per-request.
  */
 
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+const BACKEND_ROOT = path.join(__dirname, '..', '..');
+const USE_FUSION_WORKER = process.env.USE_FUSION_WORKER !== 'false';
+const FUSION_TIMEOUT_MS = Math.min(300000, Math.max(30000, parseInt(process.env.FUSION_TIMEOUT_MS, 10) || 120000));
+
 class FusionMlService {
   constructor() {
     this.pythonScriptPath = path.join(__dirname, '..', 'ml_pipeline', 'run_fusion_inference.py');
-    
+    this.workerScriptPath = path.join(__dirname, '..', 'ml_pipeline', 'fusion_worker.py');
+
     // Check for virtual environment Python first (has TensorFlow for voice model)
     const venvPython = path.join(__dirname, 'mlPhishingService', 'venv_cnn_bilstm', 'bin', 'python3');
     const venvPythonExists = fs.existsSync(venvPython);
-    
-    // Use virtual environment Python if available, otherwise use env var or default
+
     if (venvPythonExists) {
       this.pythonExecutable = venvPython;
       console.log('Fusion ML Service: Using virtual environment Python (has TensorFlow support)');
@@ -28,6 +32,12 @@ class FusionMlService {
         console.log('Fusion ML Service: Using system Python (TensorFlow may not be available)');
       }
     }
+
+    // Long-lived worker state (models loaded once in Python, reuse for all requests)
+    this._workerProcess = null;
+    this._requestQueue = [];
+    this._currentRequest = null;
+    this._stdoutBuffer = '';
   }
 
   /**
@@ -71,154 +81,204 @@ class FusionMlService {
     };
   }
 
+  _startWorker() {
+    if (this._workerProcess) return;
+    if (!fs.existsSync(this.workerScriptPath)) {
+      throw new Error('Fusion worker script not found: ' + this.workerScriptPath);
+    }
+    this._workerProcess = spawn(this.pythonExecutable, [this.workerScriptPath], {
+      cwd: BACKEND_ROOT,
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this._stdoutBuffer = '';
+    this._workerProcess.stderr.on('data', (data) => {
+      console.log('Fusion worker stderr:', data.toString().trim());
+    });
+    this._workerProcess.stdout.on('data', (data) => {
+      this._stdoutBuffer += data.toString();
+      let idx;
+      while ((idx = this._stdoutBuffer.indexOf('\n')) !== -1) {
+        const line = this._stdoutBuffer.slice(0, idx).trim();
+        this._stdoutBuffer = this._stdoutBuffer.slice(idx + 1);
+        if (line) this._onWorkerStdoutLine(line);
+      }
+    });
+    this._workerProcess.on('close', (code) => {
+      this._workerProcess = null;
+      if (this._currentRequest) {
+        this._currentRequest.reject(new Error(`Fusion worker exited with code ${code}`));
+        this._currentRequest = null;
+      }
+      this._requestQueue.forEach((r) => r.reject(new Error('Fusion worker exited')));
+      this._requestQueue = [];
+    });
+    this._workerProcess.on('error', (err) => {
+      this._workerProcess = null;
+      if (this._currentRequest) {
+        this._currentRequest.reject(err);
+        this._currentRequest = null;
+      }
+    });
+    console.log('Fusion ML Service: started long-lived worker (models load once)');
+  }
+
+  _stopWorker() {
+    if (!this._workerProcess) return;
+    try {
+      this._workerProcess.stdin.write('exit\n');
+      this._workerProcess.stdin.end();
+      this._workerProcess.kill('SIGTERM');
+    } catch (e) {}
+    this._workerProcess = null;
+    this._currentRequest = null;
+    this._requestQueue = [];
+  }
+
+  _onWorkerStdoutLine(line) {
+    const req = this._currentRequest;
+    if (!req) return;
+    if (req.timeoutId) clearTimeout(req.timeoutId);
+    this._currentRequest = null;
+    try {
+      const outputData = JSON.parse(line);
+      if (!outputData.success && outputData.error) {
+        req.reject(new Error(outputData.error));
+      } else {
+        req.resolve(outputData);
+      }
+    } catch (e) {
+      req.reject(new Error('Invalid worker output: ' + line.slice(0, 200)));
+    }
+    this._processQueue();
+  }
+
+  _processQueue() {
+    if (this._currentRequest || this._requestQueue.length === 0) return;
+    const { inputData, resolve, reject } = this._requestQueue.shift();
+    this._currentRequest = { resolve, reject, inputData, timeoutId: null };
+    const timeoutId = setTimeout(() => {
+      if (this._currentRequest && this._currentRequest.timeoutId === timeoutId) {
+        this._currentRequest = null;
+        this._stopWorker();
+        reject(new Error(`Fusion prediction timed out after ${FUSION_TIMEOUT_MS / 1000} seconds`));
+        this._processQueue();
+      }
+    }, FUSION_TIMEOUT_MS);
+    this._currentRequest.timeoutId = timeoutId; // so _onWorkerStdoutLine can clearTimeout
+    try {
+      this._workerProcess.stdin.write(JSON.stringify(inputData) + '\n');
+    } catch (e) {
+      clearTimeout(timeoutId);
+      this._currentRequest = null;
+      this._workerProcess = null;
+      reject(e);
+      this._processQueue();
+    }
+  }
+
   /**
-   * Call Python fusion inference script
+   * Call fusion via long-lived worker (models already in memory).
    * @private
    */
-  async _callPythonFusionPredictor(inputData) {
+  _callPythonFusionPredictorViaWorker(inputData) {
+    return new Promise((resolve, reject) => {
+      this._requestQueue.push({ inputData, resolve, reject });
+      try {
+        if (!this._workerProcess) this._startWorker();
+        this._processQueue();
+      } catch (e) {
+        this._requestQueue.pop();
+        reject(e);
+      }
+    });
+  }
+
+  /**
+   * Call Python fusion inference script (spawn per request, loads models every time).
+   * @private
+   */
+  _callPythonFusionPredictorSpawn(inputData) {
     return new Promise((resolve, reject) => {
       const tempDir = path.join(__dirname, '..', 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
-
       const inputPath = path.join(tempDir, `fusion_input_${Date.now()}.json`);
       const outputPath = path.join(tempDir, `fusion_output_${Date.now()}.json`);
-
-      // Write input JSON
       fs.writeFileSync(inputPath, JSON.stringify(inputData, null, 2), 'utf8');
 
-      console.log('Spawning fusion Python process:', {
-        python: this.pythonExecutable,
-        script: this.pythonScriptPath,
-        input: inputPath,
-        output: outputPath
-      });
-
-      // Spawn Python process
-      const pythonProcess = spawn(this.pythonExecutable, [
-        this.pythonScriptPath,
-        inputPath,
-        outputPath
-      ], {
-        cwd: path.join(__dirname, '..', '..'),
-        env: { ...process.env }
-      });
+      const pythonProcess = spawn(
+        this.pythonExecutable,
+        [this.pythonScriptPath, inputPath, outputPath],
+        { cwd: BACKEND_ROOT, env: { ...process.env } }
+      );
 
       let stderrOutput = '';
-      let stdoutOutput = '';
-
-      // Set timeout (60 seconds) - must be defined before close handler
       const timeoutId = setTimeout(() => {
         try {
           pythonProcess.kill('SIGTERM');
           if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
           if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-        } catch (e) {
-          console.error('Error cleaning up after timeout:', e);
-        }
-        reject(new Error('Fusion prediction timed out after 60 seconds'));
-      }, 60000);
+        } catch (e) {}
+        reject(new Error(`Fusion prediction timed out after ${FUSION_TIMEOUT_MS / 1000} seconds`));
+      }, FUSION_TIMEOUT_MS);
 
-      pythonProcess.stderr.on('data', (data) => {
-        stderrOutput += data.toString();
-        // Log stderr for debugging
-        console.log('Fusion Python stderr:', data.toString().trim());
-      });
-      
-      pythonProcess.stdout.on('data', (data) => {
-        stdoutOutput += data.toString();
-        console.log('Fusion Python stdout:', data.toString().trim());
-      });
+      pythonProcess.stderr.on('data', (data) => { stderrOutput += data.toString(); });
+      pythonProcess.stdout.on('data', () => {});
 
       pythonProcess.on('close', (code) => {
         clearTimeout(timeoutId);
         try {
           if (code !== 0) {
-            console.error('Fusion Python process failed:', {
-              code,
-              stderr: stderrOutput,
-              inputPath,
-              outputPath,
-              pythonExecutable: this.pythonExecutable,
-              scriptPath: this.pythonScriptPath
-            });
-            // Clean up temp files
-            try {
-              if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-              if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-            } catch (e) {}
-
-            reject(new Error(`Python process exited with code ${code}. Error: ${stderrOutput}`));
+            try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch (e) {}
+            reject(new Error(`Python process exited with code ${code}. ${stderrOutput}`));
             return;
           }
-
-          // Read output
           if (!fs.existsSync(outputPath)) {
-            console.error('Fusion output file not found:', outputPath);
-            console.error('Stderr output:', stderrOutput);
-            console.error('Input file exists:', fs.existsSync(inputPath));
-            try {
-              if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-            } catch (e) {}
-            reject(new Error(`Python script did not produce output file. Stderr: ${stderrOutput}`));
+            try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); } catch (e) {}
+            reject(new Error('Fusion script did not produce output file. ' + stderrOutput));
             return;
           }
-
           const outputContent = fs.readFileSync(outputPath, 'utf8');
-          console.log('Fusion output file content (first 500 chars):', outputContent.substring(0, 500));
-          
-          let outputData;
-          try {
-            outputData = JSON.parse(outputContent);
-          } catch (parseError) {
-            console.error('Failed to parse fusion output:', parseError);
-            console.error('Output content (full):', outputContent);
-            try {
-              if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-              if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-            } catch (e) {}
-            reject(new Error(`Failed to parse Python output: ${parseError.message}`));
-            return;
-          }
-
-          // Clean up temp files
           try {
             if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
             if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
           } catch (e) {}
-
+          const outputData = JSON.parse(outputContent);
           if (!outputData.success) {
-            console.error('Fusion prediction returned unsuccessful:', outputData);
             reject(new Error(outputData.error || 'Fusion prediction failed'));
             return;
           }
-
           resolve(outputData);
         } catch (error) {
-          console.error('Error in fusion Python process close handler:', error);
-          // Clean up temp files
-          try {
-            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-          } catch (e) {}
-
+          try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch (e) {}
           reject(error);
         }
       });
 
       pythonProcess.on('error', (error) => {
         clearTimeout(timeoutId);
-        console.error('Fusion Python process spawn error:', error);
-        // Clean up temp files
-        try {
-          if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-          if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-        } catch (e) {}
-
-        reject(new Error(`Failed to start Python process: ${error.message}. Python path: ${this.pythonExecutable}, Script: ${this.pythonScriptPath}`));
+        try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch (e) {}
+        reject(new Error('Failed to start Python process: ' + error.message));
       });
     });
+  }
+
+  /**
+   * Call Python fusion predictor: use long-lived worker if enabled, else spawn per request.
+   * @private
+   */
+  async _callPythonFusionPredictor(inputData) {
+    if (USE_FUSION_WORKER) {
+      try {
+        return await this._callPythonFusionPredictorViaWorker(inputData);
+      } catch (e) {
+        console.warn('Fusion worker failed, falling back to spawn-per-request:', e.message);
+        this._stopWorker();
+      }
+    }
+    return this._callPythonFusionPredictorSpawn(inputData);
   }
 
   /**
