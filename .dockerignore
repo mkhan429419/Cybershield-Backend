@@ -1,0 +1,34 @@
+# Dependencies (installed in image)
+node_modules/
+src/services/mlPhishingService/venv_cnn_bilstm/
+
+# Env and secrets (set on Render, never in image)
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Docs and local-only
+*.md
+README*
+Dockerfile
+.dockerignore
+
+# Temp and logs
+tmp/
+temp/
+*.log
+logs/
+
+# Test and coverage
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+*.lcov
+
