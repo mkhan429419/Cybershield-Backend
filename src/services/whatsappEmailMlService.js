@@ -13,20 +13,20 @@ const BACKEND_ROOT = path.join(__dirname, '..', '..');
 
 class WhatsappEmailMlService {
   constructor() {
-    // Determine Python executable - prefer python3, fallback to python
-    this.pythonExecutable = process.env.PYTHON_PATH || 'python3';
-    
-    // Verify Python is available
+    // On Windows, Python is usually 'python'; on Unix, prefer 'python3'. Allow PYTHON_PATH override.
+    const { execSync } = require('child_process');
+    const defaultPy = process.platform === 'win32' ? 'python' : 'python3';
+    this.pythonExecutable = process.env.PYTHON_PATH || defaultPy;
+
     try {
-      const { execSync } = require('child_process');
-      execSync(`${this.pythonExecutable} --version`, { stdio: 'ignore' });
+      execSync(`"${this.pythonExecutable}" --version`, { stdio: 'ignore' });
     } catch (error) {
-      // Try python as fallback
+      const fallback = this.pythonExecutable === 'python3' ? 'python' : 'python3';
       try {
-        execSync('python --version', { stdio: 'ignore' });
-        this.pythonExecutable = 'python';
+        execSync(`"${fallback}" --version`, { stdio: 'ignore' });
+        this.pythonExecutable = fallback;
       } catch (e) {
-        console.warn(`Warning: Python executable not found. Using: ${this.pythonExecutable}`);
+        console.warn(`Warning: Python executable not found. Tried: ${this.pythonExecutable}, ${fallback}. Set PYTHON_PATH if needed.`);
       }
     }
   }
