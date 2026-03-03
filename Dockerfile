@@ -21,13 +21,16 @@ COPY package*.json ./
 # Install Node dependencies
 RUN npm ci --omit=dev
 
+# Copy Python requirements and install into a venv (avoids PEP 668 externally-managed-environment)
+COPY requirements.txt ./
+RUN python3 -m venv /app/venv && \
+    /app/venv/bin/pip install --no-cache-dir -r requirements.txt
+
 # Copy backend source
 COPY . .
 
-# Install Python ML dependencies (used by fusion inference)
-RUN pip3 install --no-cache-dir -r requirements.txt
-
-# Render (and most hosts) set PORT; default 5001 for local
+# Node spawns this Python for fusion inference (fusionMlService.js reads PYTHON_PATH)
+ENV PYTHON_PATH=/app/venv/bin/python3
 ENV PORT=5001
 EXPOSE 5001
 
