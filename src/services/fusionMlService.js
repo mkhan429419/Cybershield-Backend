@@ -38,36 +38,6 @@ class FusionMlService {
     this._requestQueue = [];
     this._currentRequest = null;
     this._stdoutBuffer = '';
-    /** Set to true after first successful response from worker (models loaded and ready). */
-    this._workerReady = false;
-  }
-
-  /**
-   * Whether the fusion worker is running and has successfully served at least one request (models loaded).
-   * Use for readiness probes (e.g. Northflank).
-   */
-  isReady() {
-    return !!(this._workerProcess && this._workerReady);
-  }
-
-  /**
-   * Warm up the fusion worker at startup so models load before first user request.
-   * Call after server listen to avoid cold-start timeouts in production (e.g. Northflank, Render).
-   * Resolves when the worker has loaded and responded once; rejects on failure or timeout.
-   */
-  async warmup() {
-    if (!USE_FUSION_WORKER) {
-      console.log('Fusion ML Service: worker disabled (USE_FUSION_WORKER=false), skipping warmup');
-      return;
-    }
-    if (this._workerReady) {
-      console.log('Fusion ML Service: worker already warm, skipping warmup');
-      return;
-    }
-    console.log('Fusion ML Service: warming up worker (loading models)...');
-    const minimalPayload = this.formatIncidentForML({ text: 'warmup', messageType: 'email' });
-    await this.predictIncident(minimalPayload);
-    console.log('Fusion ML Service: warmup complete (models in memory)');
   }
 
   /**
@@ -161,7 +131,6 @@ class FusionMlService {
       this._workerProcess.kill('SIGTERM');
     } catch (e) {}
     this._workerProcess = null;
-    this._workerReady = false;
     this._currentRequest = null;
     this._requestQueue = [];
   }
@@ -176,7 +145,6 @@ class FusionMlService {
       if (!outputData.success && outputData.error) {
         req.reject(new Error(outputData.error));
       } else {
-        this._workerReady = true;
         req.resolve(outputData);
       }
     } catch (e) {

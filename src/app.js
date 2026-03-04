@@ -28,7 +28,6 @@ const EmailRiskEvent = require("./models/EmailRiskEvent");
 const User = require("./models/User");
 const { isEligibleForEmailRiskScoring, updateUserEmailRiskScore } = require("./services/emailRiskScoreService");
 const { recordWhatsAppRiskEvent } = require("./services/whatsappRiskScoreService");
-const fusionMlService = require("./services/fusionMlService");
 
 const app = express();
 
@@ -165,21 +164,13 @@ app.get("/", (req, res) => {
   });
 });
 
-// Health check endpoint (liveness: is the process up?)
+// Health check endpoint
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || "development",
   });
-});
-
-// Readiness endpoint (ML worker loaded and ready; use for Northflank/ Kubernetes readiness probe)
-app.get("/health/ready", (req, res) => {
-  if (fusionMlService.isReady()) {
-    return res.status(200).json({ status: "ready", ml: "loaded" });
-  }
-  res.status(503).json({ status: "not ready", ml: "loading" });
 });
 
 // Email open tracking: middleware logs the request, then handler serves 1x1 GIF
