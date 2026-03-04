@@ -31,6 +31,7 @@ COPY . .
 
 # Node spawns this Python for fusion inference (fusionMlService.js reads PYTHON_PATH)
 ENV PYTHON_PATH=/app/venv/bin/python3
+# PORT default; Northflank/Render set PORT at runtime—server uses process.env.PORT
 ENV PORT=5001
 EXPOSE 5001
 
