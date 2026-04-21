@@ -114,7 +114,6 @@ const inviteClientAdmin = async (req, res) => {
           } else {
             // Create user record even though invitation already exists in Clerk
             const user = new User({
-              clerkId: null,
               email,
               displayName: email.split('@')[0],
               role: 'client_admin',
@@ -144,9 +143,8 @@ const inviteClientAdmin = async (req, res) => {
     // Create user record with invited status (only if Clerk invitation was successful)
     if (invitation) {
       const user = new User({
-        clerkId: null, // Will be filled when user accepts invitation
         email,
-        displayName: email.split('@')[0], // Temporary display name
+        displayName: email.split('@')[0],
         role: 'client_admin',
         orgId: organization._id,
         status: 'invited'

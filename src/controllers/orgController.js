@@ -139,7 +139,6 @@ const bulkInviteUsers = async (req, res) => {
         // Create user record (only if Clerk invitation was successful)
         if (invitation) {
           const user = new User({
-            clerkId: null, // Will be filled when user accepts invitation
             email,
             displayName: displayName || email.split('@')[0],
             role: 'affiliated',
@@ -287,7 +286,6 @@ const inviteSingleUser = async (req, res) => {
     // Create user record (only if Clerk invitation was successful)
     if (invitation) {
       const user = new User({
-        clerkId: null, // Will be filled when user accepts invitation
         email,
         displayName: displayName || email.split('@')[0],
         role: 'affiliated',

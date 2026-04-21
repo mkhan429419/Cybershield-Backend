@@ -5,8 +5,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: false,
     unique: true,
-    sparse: true, // Allows multiple null values
-    default: null // Use null instead of empty string
+    sparse: true,
   },
   email: {
     type: String,
