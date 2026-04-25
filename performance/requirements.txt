@@ -1,0 +1,2 @@
+# Load testing — run with Locust web UI: see README.md
+locust>=2.29.0,<3
