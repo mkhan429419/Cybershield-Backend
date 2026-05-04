@@ -13,7 +13,8 @@ function generateCertificateNumber() {
 }
 
 /**
- * Check if a user has completed all modules and sections of a course
+ * Check if a user has completed all required parts of a course:
+ * every section, quiz (if present), and phishing activity (if activityType is set).
  */
 async function isCourseCompleted(userId, courseId) {
   try {
@@ -31,6 +32,7 @@ async function isCourseCompleted(userId, courseId) {
       const module = modules[modIdx];
       const sections = module.sections || [];
       const hasQuiz = (module.quiz || []).length > 0;
+      const hasActivity = !!(module.activityType && String(module.activityType).trim());
 
       // Check all sections
       for (let secIdx = 0; secIdx < sections.length; secIdx++) {
@@ -44,6 +46,14 @@ async function isCourseCompleted(userId, courseId) {
       if (hasQuiz) {
         const quizId = `${modIdx}-quiz`;
         if (!completed.has(quizId)) {
+          return false;
+        }
+      }
+
+      // Check email/WhatsApp activity submodule (N-activity) if configured
+      if (hasActivity) {
+        const activityId = `${modIdx}-activity`;
+        if (!completed.has(activityId)) {
           return false;
         }
       }

@@ -1,6 +1,21 @@
 const VoicePhishingTemplate = require("../models/VoicePhishingTemplate");
-const User = require("../models/User");
 const { PHISHING_SCENARIOS, NORMAL_SCENARIOS } = require("./voicePhishingController");
+
+/** Canonical org ObjectId hex from req.user.orgId (populated doc or bare ObjectId). */
+function resolveUserOrgId(user) {
+  if (!user?.orgId) return null;
+  const ref = user.orgId;
+  if (ref._id != null) return ref._id.toString();
+  return ref.toString();
+}
+
+/** Hex id string for Mongo ref field (bare ObjectId or populated subdoc). Null if unset. */
+function resolveReferencedId(ref) {
+  if (ref == null) return null;
+  const raw =
+    typeof ref === "object" && ref !== null && ref._id != null ? ref._id : ref;
+  return raw.toString();
+}
 
 /**
  * Get templates based on user role and organization
@@ -81,7 +96,9 @@ const getTemplate = async (req, res) => {
 
     // Check permissions
     if (user.role === "client_admin") {
-      if (!user.orgId || template.organizationId?.toString() !== user.orgId.toString()) {
+      const userOrgId = resolveUserOrgId(user);
+      const templateOrgId = resolveReferencedId(template.organizationId);
+      if (!userOrgId || templateOrgId !== userOrgId) {
         return res.status(403).json({
           success: false,
           message: "Access denied to this template",
@@ -89,7 +106,7 @@ const getTemplate = async (req, res) => {
       }
     } else if (user.role === "system_admin") {
       // System admins can only access templates for non-affiliated users
-      if (template.organizationId !== null) {
+      if (resolveReferencedId(template.organizationId) != null) {
         return res.status(403).json({
           success: false,
           message: "Access denied to this template",
@@ -212,7 +229,9 @@ const updateTemplate = async (req, res) => {
 
     // Check permissions
     if (user.role === "client_admin") {
-      if (!user.orgId || template.organizationId?.toString() !== user.orgId.toString()) {
+      const userOrgId = resolveUserOrgId(user);
+      const templateOrgId = resolveReferencedId(template.organizationId);
+      if (!userOrgId || templateOrgId !== userOrgId) {
         return res.status(403).json({
           success: false,
           message: "Access denied to this template",
@@ -220,7 +239,7 @@ const updateTemplate = async (req, res) => {
       }
     } else if (user.role === "system_admin") {
       // System admins can only access templates for non-affiliated users
-      if (template.organizationId !== null) {
+      if (resolveReferencedId(template.organizationId) != null) {
         return res.status(403).json({
           success: false,
           message: "Access denied to this template",
@@ -288,7 +307,9 @@ const deleteTemplate = async (req, res) => {
 
     // Check permissions
     if (user.role === "client_admin") {
-      if (!user.orgId || template.organizationId?.toString() !== user.orgId.toString()) {
+      const userOrgId = resolveUserOrgId(user);
+      const templateOrgId = resolveReferencedId(template.organizationId);
+      if (!userOrgId || templateOrgId !== userOrgId) {
         return res.status(403).json({
           success: false,
           message: "Access denied to this template",
@@ -296,7 +317,7 @@ const deleteTemplate = async (req, res) => {
       }
     } else if (user.role === "system_admin") {
       // System admins can only access templates for non-affiliated users
-      if (template.organizationId !== null) {
+      if (resolveReferencedId(template.organizationId) != null) {
         return res.status(403).json({
           success: false,
           message: "Access denied to this template",
