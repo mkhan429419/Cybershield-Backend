@@ -1,6 +1,6 @@
 const VoicePhishingConversation = require("../models/VoicePhishingConversation");
 const VoicePhishingTemplate = require("../models/VoicePhishingTemplate");
-const geminiService = require("../services/geminiService");
+const groqService = require("../services/groqService");
 const voicePhishingMLService = require("../services/voicePhishingMLService");
 const fusionMlService = require("../services/fusionMlService");
 const translationService = require("../services/translationService");
@@ -9,7 +9,7 @@ const User = require("../models/User");
 // Use fusion model by default, can be overridden with USE_FUSION_MODEL=false
 const USE_FUSION_MODEL = process.env.USE_FUSION_MODEL !== 'false';
 
-// Configuration: Set to 'ml' to use ML model, 'gemini' to use Gemini AI
+// Configuration: Set to 'ml' to use ML model, anything else (e.g. 'llm') to use Groq
 const ANALYSIS_METHOD = process.env.VOICE_PHISHING_ANALYSIS_METHOD || 'ml';
 // Model type: 'ml', 'cnn_bilstm', 'ensemble', or 'auto' (auto-selects best available)
 // Default: 'cnn_bilstm' - uses CNN-BiLSTM model only
@@ -455,7 +455,7 @@ const endConversation = async (req, res) => {
       translatedTranscript = fullTranscript;
     }
 
-    // Analyze conversation using ML model or Gemini AI service
+    // Analyze conversation using ML model or Groq LLM
     let analysis;
     try {
       if (ANALYSIS_METHOD === 'ml') {
@@ -510,18 +510,18 @@ const endConversation = async (req, res) => {
             }
           };
           
-          // Get Gemini results (summary, info types) - always use Gemini for detailed analysis
-          const geminiResult = await geminiService.getSummaryAndInfoTypes(
+          // Get Groq results (summary, info types) - LLM for detailed analysis
+          const groqResult = await groqService.getSummaryAndInfoTypes(
             translatedTranscript,
             conversation.scenarioType
           );
           
-          // Combine fusion results with Gemini for detailed info
-          if (cnnAnalysis && cnnAnalysis.success && geminiResult.success) {
-            // Use Gemini's info types to determine if sensitive info was provided
-            const hasSensitiveInfo = geminiResult.sensitiveInfoTypes && geminiResult.sensitiveInfoTypes.length > 0;
+          // Combine fusion results with Groq for detailed info
+          if (cnnAnalysis && cnnAnalysis.success && groqResult.success) {
+            // Use Groq-derived info types to determine if sensitive info was provided
+            const hasSensitiveInfo = groqResult.sensitiveInfoTypes && groqResult.sensitiveInfoTypes.length > 0;
             
-            // Calculate final score and resistance based on fusion + Gemini
+            // Calculate final score and resistance based on fusion + Groq
             let finalScore = cnnAnalysis.analysis.score;
             let finalResistanceLevel = cnnAnalysis.analysis.resistanceLevel;
             let finalFellForPhishing = cnnAnalysis.analysis.fellForPhishing;
@@ -550,18 +550,18 @@ const endConversation = async (req, res) => {
                 modelConfidence: cnnAnalysis.analysis.modelConfidence,
                 modelType: 'fusion_hybrid',
                 providedSensitiveInfo: hasSensitiveInfo,
-                sensitiveInfoTypes: geminiResult.sensitiveInfoTypes || [],
-                analysisRationale: geminiResult.analysisRationale || cnnAnalysis.analysis.analysisRationale,
+                sensitiveInfoTypes: groqResult.sensitiveInfoTypes || [],
+                analysisRationale: groqResult.analysisRationale || cnnAnalysis.analysis.analysisRationale,
               }
             };
-            console.log("Fusion + Gemini hybrid analysis completed successfully");
+            console.log("Fusion + Groq hybrid analysis completed successfully");
           } else {
-            // Fallback to fusion only if Gemini fails
-            console.warn("Gemini failed, using fusion results only");
+            // Fallback to fusion only if Groq fails
+            console.warn("Groq failed, using fusion results only");
             analysis = cnnAnalysis;
           }
         } else if (MODEL_TYPE === 'cnn_bilstm') {
-          console.log("Using hybrid approach: CNN-BiLSTM + Gemini");
+          console.log("Using hybrid approach: CNN-BiLSTM + Groq");
           
           // Get CNN-BiLSTM results (score, resistance, fellForPhishing)
           // Use translated transcript for ML model (trained on English)
@@ -578,22 +578,20 @@ const endConversation = async (req, res) => {
           
           cnnAnalysis = await Promise.race([analysisPromise, timeoutPromise]);
           
-          // Get Gemini results (summary, info types)
-          // Use translated transcript for Gemini to ensure consistent analysis
-          // Gemini can handle multiple languages, but using English ensures better consistency
-          const geminiResult = await geminiService.getSummaryAndInfoTypes(
+          // Get Groq results (summary, info types); English transcript for consistency
+          const groqResult = await groqService.getSummaryAndInfoTypes(
             translatedTranscript,
             conversation.scenarioType
           );
           
-          // Combine results: Fusion/ML model for score/resistance, Gemini for summary/info types
-          if (cnnAnalysis && cnnAnalysis.success && geminiResult.success) {
-            // Use Gemini's info types to determine if sensitive info was provided
-            const hasSensitiveInfo = geminiResult.sensitiveInfoTypes && geminiResult.sensitiveInfoTypes.length > 0;
+          // Combine results: Fusion/ML model for score/resistance, Groq for summary/info types
+          if (cnnAnalysis && cnnAnalysis.success && groqResult.success) {
+            // Use Groq-derived info types to determine if sensitive info was provided
+            const hasSensitiveInfo = groqResult.sensitiveInfoTypes && groqResult.sensitiveInfoTypes.length > 0;
             
             // Calculate nuanced score based on:
             // 1. CNN-BiLSTM base prediction
-            // 2. What info was actually provided (from Gemini)
+            // 2. What info was actually provided (from Groq)
             // 3. Amount of resistance shown
             let finalScore = cnnAnalysis.analysis.score;
             let finalResistanceLevel = cnnAnalysis.analysis.resistanceLevel;
@@ -614,7 +612,7 @@ const endConversation = async (req, res) => {
             };
             
             // Calculate total criticality of provided info
-            const totalCriticality = (geminiResult.sensitiveInfoTypes || []).reduce((sum, type) => {
+            const totalCriticality = (groqResult.sensitiveInfoTypes || []).reduce((sum, type) => {
               return sum + (infoCriticality[type] || 2);
             }, 0);
             
@@ -695,21 +693,21 @@ const endConversation = async (req, res) => {
                 modelPrediction: cnnAnalysis.analysis.modelPrediction,
                 modelConfidence: cnnAnalysis.analysis.modelConfidence,
                 modelType: 'cnn_bilstm_hybrid',
-                // From Gemini (summary and info type detection)
+                // From Groq (summary and info type detection)
                 providedSensitiveInfo: hasSensitiveInfo,
-                sensitiveInfoTypes: geminiResult.sensitiveInfoTypes || [],
-                analysisRationale: geminiResult.analysisRationale,
+                sensitiveInfoTypes: groqResult.sensitiveInfoTypes || [],
+                analysisRationale: groqResult.analysisRationale,
               }
             };
             console.log("Hybrid analysis completed successfully");
             console.log("CNN-BiLSTM base score:", cnnAnalysis.analysis.score);
             console.log("CNN-BiLSTM resistance:", cnnAnalysis.analysis.resistanceLevel);
-            console.log("Gemini info types:", geminiResult.sensitiveInfoTypes);
+            console.log("Groq info types:", groqResult.sensitiveInfoTypes);
             console.log("Total criticality:", totalCriticality);
             console.log("Final adjusted score:", finalScore);
           } else {
-            // Fallback to CNN-BiLSTM only if Gemini fails
-            console.warn("Gemini failed, using CNN-BiLSTM results only");
+            // Fallback to CNN-BiLSTM only if Groq fails
+            console.warn("Groq failed, using CNN-BiLSTM results only");
             analysis = cnnAnalysis;
           }
         } else {
@@ -730,9 +728,9 @@ const endConversation = async (req, res) => {
           console.log("ML analysis completed successfully");
         }
       } else {
-        console.log("Using Gemini AI for analysis...");
-        // Use translated transcript for Gemini to ensure consistent analysis
-        analysis = await geminiService.analyzeConversation(
+        console.log("Using Groq for analysis...");
+        // English transcript for consistent LLM analysis
+        analysis = await groqService.analyzeConversation(
           translatedTranscript,
           conversation.scenarioType
         );
@@ -752,18 +750,17 @@ const endConversation = async (req, res) => {
       console.error("Analysis object:", analysis);
       console.error("Full analysis object:", JSON.stringify(analysis, null, 2));
       
-      // Fallback to Gemini if ML model fails
+      // Fallback to Groq if ML model fails
       if (ANALYSIS_METHOD === 'ml') {
-        console.log("ML model failed, falling back to Gemini...");
+        console.log("ML model failed, falling back to Groq...");
         try {
-          // Use translated transcript for Gemini fallback too
-          analysis = await geminiService.analyzeConversation(
+          analysis = await groqService.analyzeConversation(
             translatedTranscript,
             conversation.scenarioType
           );
-          console.log("Gemini fallback successful");
-        } catch (geminiError) {
-          console.error("Gemini fallback also failed:", geminiError);
+          console.log("Groq fallback successful");
+        } catch (groqError) {
+          console.error("Groq fallback also failed:", groqError);
         }
       }
       

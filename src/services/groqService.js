@@ -1,32 +1,75 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const axios = require("axios");
 
-class GeminiService {
+const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+function stripJsonFence(text) {
+  let jsonText = text.trim();
+  if (jsonText.startsWith("```json")) {
+    jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  } else if (jsonText.startsWith("```")) {
+    jsonText = jsonText.replace(/```\n?/g, "").trim();
+  }
+  return jsonText;
+}
+
+class GroqService {
   constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY;
-    
+    this.apiKey = process.env.GROQ_API_KEY;
+    this.modelName = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+
     if (!this.apiKey) {
-      console.warn("GEMINI_API_KEY not set in environment variables");
-    } else {
-      this.genAI = new GoogleGenerativeAI(this.apiKey);
+      console.warn("GROQ_API_KEY not set in environment variables");
     }
   }
 
   /**
-   * Analyze conversation transcript and calculate phishing score using Gemini AI
-   * @param {string} transcript - Full conversation transcript
-   * @param {string} scenarioType - "phishing" or "normal"
-   * @returns {Promise<Object>} Analysis results with score and details
+   * @param {Array<{ role: string, content: string }>} messages
+   * @param {{ temperature?: number, maxTokens?: number, jsonMode?: boolean }} opts
+   */
+  async chat(messages, opts = {}) {
+    const { temperature = 0.7, maxTokens = 4096, jsonMode = false } = opts;
+
+    if (!this.apiKey) {
+      throw new Error("Groq API key is not configured");
+    }
+
+    const body = {
+      model: this.modelName,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    };
+
+    if (jsonMode) {
+      body.response_format = { type: "json_object" };
+    }
+
+    const { data } = await axios.post(GROQ_CHAT_URL, body, {
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 120000,
+    });
+
+    const content = data?.choices?.[0]?.message?.content;
+    if (content == null || String(content).length === 0) {
+      throw new Error("Empty response from Groq");
+    }
+    return String(content);
+  }
+
+  /**
+   * Analyze conversation transcript (LLM-only path and ML fallback)
    */
   async analyzeConversation(transcript, scenarioType) {
     try {
-      if (!this.apiKey || !this.genAI) {
+      if (!this.apiKey) {
         return {
           success: false,
-          error: "Gemini API key is not configured",
+          error: "Groq API key is not configured",
         };
       }
-
-      const model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const analysisPrompt = `You are a cybersecurity expert analyzing a phone conversation transcript from a security awareness training exercise in Pakistan. Your task is to evaluate how well the user resisted a potential phishing attempt.
 
@@ -106,7 +149,7 @@ Analyze this conversation and determine:
 - Consider the user's tone, hesitation, and questioning as signs of awareness
 - If scenarioType is "normal", the user should NOT be penalized for normal interactions
 
-**Return your analysis in valid JSON format ONLY (no markdown, no code blocks, just the JSON object):**
+Return a single JSON object (no markdown) with exactly these keys:
 {
   "fellForPhishing": boolean,
   "providedSensitiveInfo": boolean,
@@ -116,21 +159,13 @@ Analyze this conversation and determine:
   "analysisRationale": "detailed explanation with specific examples from the conversation"
 }`;
 
-      const result = await model.generateContent(analysisPrompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.chat(
+        [{ role: "user", content: analysisPrompt }],
+        { jsonMode: true, temperature: 0.3, maxTokens: 8192 }
+      );
 
-      // Parse JSON from response (remove markdown code blocks if present)
-      let jsonText = text.trim();
-      if (jsonText.startsWith("```json")) {
-        jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      } else if (jsonText.startsWith("```")) {
-        jsonText = jsonText.replace(/```\n?/g, "").trim();
-      }
+      const analysis = JSON.parse(stripJsonFence(text));
 
-      const analysis = JSON.parse(jsonText);
-
-      // Validate the response structure
       if (
         typeof analysis.fellForPhishing !== "boolean" ||
         typeof analysis.providedSensitiveInfo !== "boolean" ||
@@ -139,10 +174,9 @@ Analyze this conversation and determine:
         typeof analysis.score !== "number" ||
         typeof analysis.analysisRationale !== "string"
       ) {
-        throw new Error("Invalid analysis response structure from Gemini");
+        throw new Error("Invalid analysis response structure from Groq");
       }
 
-      // Ensure score is within valid range
       analysis.score = Math.max(0, Math.min(100, Math.round(analysis.score)));
 
       return {
@@ -157,11 +191,10 @@ Analyze this conversation and determine:
         },
       };
     } catch (error) {
-      console.error("Error analyzing conversation with Gemini:", error);
-      
-      // If JSON parsing fails, try to extract JSON from the response
-      if (error.message.includes("JSON") || error instanceof SyntaxError) {
-        console.error("Failed to parse Gemini response as JSON. Raw response:", error.message);
+      console.error("Error analyzing conversation with Groq:", error);
+
+      if (error.message?.includes("JSON") || error instanceof SyntaxError) {
+        console.error("Failed to parse Groq response as JSON");
       }
 
       return {
@@ -172,22 +205,16 @@ Analyze this conversation and determine:
   }
 
   /**
-   * Get summary and sensitive information types from Gemini (for hybrid approach)
-   * This is used when CNN-BiLSTM provides score/resistance, and Gemini provides summary/info types
-   * @param {string} transcript - Full conversation transcript
-   * @param {string} scenarioType - "phishing" or "normal"
-   * @returns {Promise<Object>} Summary and sensitive info types
+   * Summary + sensitive info types for hybrid ML + LLM path
    */
   async getSummaryAndInfoTypes(transcript, scenarioType) {
     try {
-      if (!this.apiKey || !this.genAI) {
+      if (!this.apiKey) {
         return {
           success: false,
-          error: "Gemini API key is not configured",
+          error: "Groq API key is not configured",
         };
       }
-
-      const model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const analysisPrompt = `You are a cybersecurity expert analyzing a phone conversation transcript from a security awareness training exercise in Pakistan. Your task is to identify what sensitive information the user provided and create a detailed summary.
 
@@ -234,32 +261,21 @@ ${transcript}
 - Consider the user's tone, hesitation, and questioning as signs of awareness
 - If scenarioType is "normal", the user should NOT be penalized for normal interactions
 
-**Return your analysis in valid JSON format ONLY (no markdown, no code blocks, just the JSON object):**
+Return a single JSON object (no markdown) with exactly these keys:
 {
   "sensitiveInfoTypes": ["type1", "type2"],
   "analysisRationale": "detailed explanation with specific examples from the conversation"
 }`;
 
-      const result = await model.generateContent(analysisPrompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.chat(
+        [{ role: "user", content: analysisPrompt }],
+        { jsonMode: true, temperature: 0.3, maxTokens: 8192 }
+      );
 
-      // Parse JSON from response (remove markdown code blocks if present)
-      let jsonText = text.trim();
-      if (jsonText.startsWith("```json")) {
-        jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      } else if (jsonText.startsWith("```")) {
-        jsonText = jsonText.replace(/```\n?/g, "").trim();
-      }
+      const analysis = JSON.parse(stripJsonFence(text));
 
-      const analysis = JSON.parse(jsonText);
-
-      // Validate the response structure
-      if (
-        !Array.isArray(analysis.sensitiveInfoTypes) ||
-        typeof analysis.analysisRationale !== "string"
-      ) {
-        throw new Error("Invalid analysis response structure from Gemini");
+      if (!Array.isArray(analysis.sensitiveInfoTypes) || typeof analysis.analysisRationale !== "string") {
+        throw new Error("Invalid analysis response structure from Groq");
       }
 
       return {
@@ -268,11 +284,10 @@ ${transcript}
         analysisRationale: analysis.analysisRationale,
       };
     } catch (error) {
-      console.error("Error getting summary and info types from Gemini:", error);
-      
-      // If JSON parsing fails, try to extract JSON from the response
-      if (error.message.includes("JSON") || error instanceof SyntaxError) {
-        console.error("Failed to parse Gemini response as JSON. Raw response:", error.message);
+      console.error("Error getting summary and info types from Groq:", error);
+
+      if (error.message?.includes("JSON") || error instanceof SyntaxError) {
+        console.error("Failed to parse Groq response as JSON");
       }
 
       return {
@@ -283,5 +298,4 @@ ${transcript}
   }
 }
 
-module.exports = new GeminiService();
-
+module.exports = new GroqService();
